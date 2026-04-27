@@ -1,24 +1,23 @@
-async function loadProfile() {
-    const { data: profile, error } = await _supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', currentUser.id)
-        .single();
+async function loadMyProfile() {
+  if (!STATE.user) return;
+  var body = el('profile-body');
+  var p = STATE.profile || {};
+  body.innerHTML = `
+    <div class="p-header">
+      <img src="${p.avatar_url || 'https://via.placeholder.com/100'}" class="p-avatar">
+      <div class="p-name">${p.full_name || 'User'}</div>
+      <div class="p-username">@${p.username || 'username'}</div>
+      <div class="p-bio">${p.bio || ''}</div>
+    </div>
+    <div class="p-grid" id="p-grid"></div>
+  `;
+  loadUserVideos(STATE.user.id, 'p-grid');
+}
 
-    if (error) return;
-
-    document.getElementById('p-username').innerText = profile.username;
-    document.getElementById('p-avatar').src = profile.avatar_url;
-
-    const { data: videos } = await _supabase
-        .from('videos')
-        .select('*')
-        .eq('user_id', currentUser.id);
-
-    const grid = document.getElementById('profile-videos');
-    grid.innerHTML = videos.map(v => `
-        <div class="profile-video-item" onclick="viewVideo('${v.url}')">
-            <video src="${v.url}"></video>
-        </div>
-    `).join('');
+async function loadUserVideos(uid, gridId) {
+  var { data } = await _supabase.from('videos').select('*').eq('user_id', uid);
+  var grid = el(gridId);
+  if (data && grid) {
+    grid.innerHTML = data.map(v => `<div class="p-vid"><video src="${v.url}"></video></div>`).join('');
+  }
 }
