@@ -1,42 +1,28 @@
-async function handleUpload(event) {
-    const file = event.target.files[0];
-    if (!file) return;
+async function handleUpload() {
+  var fileInp = el('upl-inp');
+  if (!fileInp.files[0] || !STATE.user) return;
+  var file = fileInp.files[0];
+  var title = el('upl-title').value;
+  var desc = el('upl-desc').value;
 
-    const loading = document.createElement('div');
-    loading.className = 'loading-overlay';
-    loading.innerHTML = 'Качване...';
-    document.body.appendChild(loading);
+  el('upl-act').style.display = 'none';
+  el('upl-prog').style.display = 'block';
 
-    try {
-        const fileExt = file.name.split('.').pop();
-        const fileName = `${Math.random()}.${fileExt}`;
-        const filePath = `${currentUser.id}/${fileName}`;
+  var fName = Date.now() + '_' + file.name;
+  var { data, error } = await _supabase.storage.from('videos').upload(STATE.user.id + '/' + fName, file);
 
-        const { data, error: uploadError } = await _supabase.storage
-            .from('videos')
-            .upload(filePath, file);
+  if (error) { showToast('Грешка при качване'); return; }
 
-        if (uploadError) throw uploadError;
+  var { data: urlData } = _supabase.storage.from('videos').getPublicUrl(STATE.user.id + '/' + fName);
+  
+  await _supabase.from('videos').insert([{
+    user_id: STATE.user.id,
+    url: urlData.publicUrl,
+    title: title,
+    description: desc
+  }]);
 
-        const { data: { publicUrl } } = _supabase.storage
-            .from('videos')
-            .getPublicUrl(filePath);
-
-        const { error: dbError } = await _supabase
-            .from('videos')
-            .insert([{ 
-                user_id: currentUser.id, 
-                url: publicUrl,
-                description: '' 
-            }]);
-
-        if (dbError) throw dbError;
-
-        alert('Видеото е качено успешно!');
-        showSection('feed');
-    } catch (error) {
-        alert(error.message);
-    } finally {
-        loading.remove();
-    }
+  el('upl-prog').style.display = 'none';
+  el('upl-suc').style.display = 'block';
+  setTimeout(() => { closeModal('m-upload'); window.location.reload(); }, 2000);
 }
