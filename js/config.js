@@ -1,20 +1,2 @@
-var STATE = {...}
-var CONFIG = {...}
-
-function fmt() {}
-function fmtBytes() {}
-function fmtTime() {}
-function fmtDur() {}
-
-function el() {}
-function mk() {}
-function ico() {}
-
-function showToast() {}
-
-function openModal() {}
-function closeModal() {}
-
-function bindSwipe() {}
-
-function parseTags() {}
+const SUPABASE_URL = 'https://ofmbeukfctaxunfupmhi.supabase.co';
+const SUPABASE_ANON_KEY = 'YOUR_ANON_KEY'; // Тук беше твоят ключ
