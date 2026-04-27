@@ -1,18 +1,30 @@
-let currentUser = null;
+// Глобални променливи и помощни функции от оригиналния код
+var STATE = {
+    user: null,
+    profile: null,
+    page: 'feed',
+    lastMsgTime: 0,
+    msgCount: 0,
+    videos: [],
+    following: []
+};
 
-function showSection(sectionId) {
-    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
-    document.getElementById(sectionId).classList.add('active');
+function el(id) { return document.getElementById(id); }
+
+function showPage(pageId) {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    var p = el('page-' + pageId);
+    if (p) p.classList.add('active');
     
-    document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active'));
-    event?.currentTarget?.classList.add('active');
-
-    if (sectionId === 'feed') loadFeed();
-    if (sectionId === 'profile') loadProfile();
-    if (sectionId === 'notifications') loadNotifications();
-    if (sectionId === 'search') loadSearch();
+    document.querySelectorAll('.bn').forEach(b => b.classList.remove('active'));
+    var b = el('bn-' + pageId);
+    if (b) b.classList.add('active');
+    
+    STATE.page = pageId;
 }
 
+// Инициализация на Lucide и старт
 document.addEventListener('DOMContentLoaded', () => {
-    checkUser();
+    if (window.lucide) lucide.createIcons();
+    // Тук добави логиката за проверка на потребител
 });
