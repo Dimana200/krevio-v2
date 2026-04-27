@@ -1,5 +1,14 @@
-async function loadComments(videoId) {
-    const { data: comments } = await _supabase.from('comments').select('*, profiles(username)').eq('video_id', videoId);
-    const container = document.getElementById('comments-container');
-    container.innerHTML = comments.map(c => `<div><b>${c.profiles.username}:</b> ${c.content}</div>`).join('');
+async function showComments(videoId) {
+  STATE.currentCmtVid = videoId;
+  showModal('m-comments');
+  var list = el('cmt-list');
+  list.innerHTML = 'Зареждане...';
+  var { data } = await _supabase.from('comments').select('*, profiles(full_name)').eq('video_id', videoId);
+  if (data) {
+    list.innerHTML = data.map(c => `
+      <div class="cmt-item">
+        <b>${c.profiles.full_name}:</b> ${c.content}
+      </div>
+    `).join('');
+  }
 }
