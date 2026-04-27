@@ -1,20 +1,20 @@
-async function showComments(videoId) {
-    // В index.33.html това отваряше секция, тук е логиката за зареждане
-    console.log("Зареждане на коментари за видео:", videoId);
-    const { data: comments, error } = await _supabase
-        .from('comments')
-        .select('*, profiles(username)')
-        .eq('video_id', videoId);
-
-    if (error) return console.error(error);
-    
-    // Тук можеш да добавиш логика за показване в модален прозорец или нова секция
-    alert("Функцията за коментари е активна за видео: " + videoId);
-}
-
-async function likeVideo(videoId) {
-    console.log("Харесване на видео:", videoId);
-    // Логика за ъпдейт на лайкове в базата данни
-    const { data, error } = await _supabase.rpc('increment_likes', { video_id: videoId });
-    if (error) console.error("Грешка при лайк:", error.message);
+function createVideoCard(v) {
+  var name = v.profiles ? v.profiles.full_name || 'User' : 'User';
+  var avatar = v.profiles && v.profiles.avatar_url ? v.profiles.avatar_url : 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + name;
+  return `
+    <div class="v-card">
+      <video src="${v.url}" loop playsinline onclick="this.paused?this.play():this.pause()"></video>
+      <div class="v-meta">
+        <div class="v-user">
+          <img src="${avatar}" style="width:32px;height:32px;border-radius:50%;border:1px solid var(--gold)">
+          @${name}
+        </div>
+        <div class="v-desc">${v.description || ''}</div>
+      </div>
+      <div class="v-actions">
+        <div class="v-act-btn"><i data-lucide="heart"></i><span>${v.likes_count || 0}</span></div>
+        <div class="v-act-btn" onclick="showComments('${v.id}')"><i data-lucide="message-circle"></i><span>${v.comments_count || 0}</span></div>
+        <div class="v-act-btn"><i data-lucide="share-2"></i></div>
+      </div>
+    </div>`;
 }
