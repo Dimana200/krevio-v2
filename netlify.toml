@@ -1,0 +1,9 @@
+[[redirects]]
+  from = "/video/:id"
+  to = "/video.html"
+  status = 200
+
+[[redirects]]
+  from = "/profile/:id"
+  to = "/profile.html"
+  status = 200
