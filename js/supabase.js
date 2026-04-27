@@ -1,6 +1,2 @@
-STATE.sb = supabase.createClient(...)
-
-STATE.sb.auth.onAuthStateChange(...)
-
-async function initUser() {}
-async function loadMyProfile() {}
+const { createClient } = supabase;
+const _supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
