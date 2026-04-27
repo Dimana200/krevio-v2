@@ -1,73 +1,58 @@
 async function checkUser() {
-    const { data: { user } } = await _supabase.auth.getUser();
-    if (user) {
-        currentUser = user;
-        document.getElementById('auth-screen').style.display = 'none';
-        document.getElementById('main-app').style.display = 'block';
-        loadFeed();
-    } else {
-        document.getElementById('auth-screen').style.display = 'flex';
-        document.getElementById('main-app').style.display = 'none';
-    }
+  const { data: { user } } = await _supabase.auth.getUser();
+  if (user) {
+    STATE.user = user;
+    const { data: prof } = await _supabase.from('profiles').select('*').eq('id', user.id).single();
+    STATE.profile = prof;
+    loadFeed();
+  }
 }
 
-async function handleAuth(event) {
-    event.preventDefault();
-    const email = document.getElementById('email').value;
-    const password = document.getElementById('password').value;
-    const isSignUp = document.getElementById('auth-title').innerText === 'Регистрация';
-
-    try {
-        if (isSignUp) {
-            const username = document.getElementById('username').value;
-            const { data, error } = await _supabase.auth.signUp({ 
-                email, 
-                password,
-                options: { data: { username: username } }
-            });
-            if (error) throw error;
-            
-            const { error: profileError } = await _supabase
-                .from('profiles')
-                .insert([
-                    { 
-                        id: data.user.id, 
-                        username: username,
-                        avatar_url: `https://api.dicebear.com/7.x/avataaars/svg?seed=${username}`
-                    }
-                ]);
-            if (profileError) throw profileError;
-            alert('Регистрацията е успешна! Моля, потвърдете имейла си.');
-        } else {
-            const { error } = await _supabase.auth.signInWithPassword({ email, password });
-            if (error) throw error;
-        }
-        checkUser();
-    } catch (error) {
-        alert(error.message);
-    }
+async function doLogin() {
+  var email = el('l-email').value;
+  var pass = el('l-pass').value;
+  var err = el('l-err');
+  err.innerText = '';
+  const { data, error } = await _supabase.auth.signInWithPassword({ email, password: pass });
+  if (error) { err.innerText = error.message; return; }
+  closeModal('m-auth');
+  window.location.reload();
 }
 
-function toggleAuth() {
-    const title = document.getElementById('auth-title');
-    const userField = document.getElementById('username-field');
-    const btn = document.querySelector('.auth-btn');
-    const toggleText = document.querySelector('.auth-toggle');
-
-    if (title.innerText === 'Вход') {
-        title.innerText = 'Регистрация';
-        userField.style.display = 'block';
-        btn.innerText = 'Регистрирай се';
-        toggleText.innerText = 'Вече имаш профил? Влез';
-    } else {
-        title.innerText = 'Вход';
-        userField.style.display = 'none';
-        btn.innerText = 'Влез';
-        toggleText.innerText = 'Нямаш профил? Регистрирай се';
-    }
+async function doRegister() {
+  var name = el('r-name').value;
+  var email = el('r-email').value;
+  var pass = el('r-pass').value;
+  var err = el('r-err');
+  err.innerText = '';
+  const { data, error } = await _supabase.auth.signUp({ 
+    email, 
+    password: pass, 
+    options: { data: { full_name: name } } 
+  });
+  if (error) { err.innerText = error.message; return; }
+  if (data.user) {
+    await _supabase.from('profiles').insert([{ 
+      id: data.user.id, 
+      full_name: name, 
+      username: name.toLowerCase().replace(/\s/g, '') 
+    }]);
+  }
+  showToast('Готово! Провери имейла си.');
+  closeModal('m-auth');
 }
 
-async function logout() {
-    await _supabase.auth.signOut();
-    location.reload();
+async function doLogout() {
+  await _supabase.auth.signOut();
+  window.location.reload();
 }
+
+el('sw-login').onclick = function() {
+  el('sw-login').classList.add('active'); el('sw-register').classList.remove('active');
+  el('auth-login').style.display = 'block'; el('auth-register').style.display = 'none';
+};
+
+el('sw-register').onclick = function() {
+  el('sw-register').classList.add('active'); el('sw-login').classList.remove('active');
+  el('auth-register').style.display = 'block'; el('auth-login').style.display = 'none';
+};
