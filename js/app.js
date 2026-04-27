@@ -1,11 +1,6 @@
-function showPage() {}
+let currentUser = null;
 
-function toggleFullscreen() {}
-
-function handleOrientation() {}
-
-function bindAll() {}
-
-window.addEventListener('load', ...)
-
-window.addEventListener('popstate', ...)
+document.addEventListener('DOMContentLoaded', () => {
+    checkUser();
+    // Инициализация на интерфейса и навигацията
+});
