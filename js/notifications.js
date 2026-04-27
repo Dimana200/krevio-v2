@@ -1,9 +1,4 @@
-async function sendNotif() {}
-
-function subscribeNotifs() {}
-
-async function updateNotifBadge() {}
-
-async function markNotifsRead() {}
-
-async function renderInbox() {}
+async function loadNotifications() {
+    const { data: notes } = await _supabase.from('notifications').select('*').eq('user_id', currentUser.id);
+    // Логика за показване на известия
+}
