@@ -1,35 +1,20 @@
-function createVideoCard(video) {
-    return `
-        <div class="video-card">
-            <div class="video-header">
-                <img src="${video.profiles?.avatar_url || 'https://via.placeholder.com/40'}" class="user-avatar">
-                <span class="username">${video.profiles?.username || 'Потребител'}</span>
-            </div>
-            <div class="video-container">
-                <video src="${video.url}" loop onclick="togglePlay(this)"></video>
-            </div>
-            <div class="video-actions">
-                <div class="action-item" onclick="likeVideo('${video.id}')">
-                    <i class="fas fa-heart"></i>
-                    <span>${video.likes || 0}</span>
-                </div>
-                <div class="action-item" onclick="showComments('${video.id}')">
-                    <i class="fas fa-comment"></i>
-                    <span>${video.comments_count || 0}</span>
-                </div>
-                <div class="action-item">
-                    <i class="fas fa-share"></i>
-                </div>
-            </div>
-        </div>
-    `;
+async function showComments(videoId) {
+    // В index.33.html това отваряше секция, тук е логиката за зареждане
+    console.log("Зареждане на коментари за видео:", videoId);
+    const { data: comments, error } = await _supabase
+        .from('comments')
+        .select('*, profiles(username)')
+        .eq('video_id', videoId);
+
+    if (error) return console.error(error);
+    
+    // Тук можеш да добавиш логика за показване в модален прозорец или нова секция
+    alert("Функцията за коментари е активна за видео: " + videoId);
 }
 
-function togglePlay(video) {
-    if (video.paused) {
-        document.querySelectorAll('video').forEach(v => v.pause());
-        video.play();
-    } else {
-        video.pause();
-    }
+async function likeVideo(videoId) {
+    console.log("Харесване на видео:", videoId);
+    // Логика за ъпдейт на лайкове в базата данни
+    const { data, error } = await _supabase.rpc('increment_likes', { video_id: videoId });
+    if (error) console.error("Грешка при лайк:", error.message);
 }
