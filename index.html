@@ -1,182 +1,10 @@
-<!DOCTYPE html>
-<html lang="bg">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no">
-<title>Krevio — Гледай и споделяй видеа</title>
-<meta name="description" content="Krevio е платформа за видеа — гледай, качвай и печели от съдържанието си.">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 <script src="https://unpkg.com/lucide@latest"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<link rel="stylesheet" href="css/base.css">
-<link rel="stylesheet" href="css/nav.css">
-<link rel="stylesheet" href="css/feed.css">
-<link rel="stylesheet" href="css/profile.css">
-<link rel="stylesheet" href="css/modals.css">
-<link rel="stylesheet" href="css/components.css">
-</head>
-<body>
-
-<div id="page-feed" class="page active">
-  <div class="feed-top">
-    <div class="feed-top-row1">
-      <div class="logo">KREVIO</div>
-      <div class="feed-top-icons">
-        <button class="feed-top-btn" id="btn-fullscreen"><i data-lucide="maximize-2"></i> Голям</button>
-      </div>
-    </div>
-    <div class="feed-tabs">
-      <div class="feed-tab active" id="tab-trending">🔥 Trending</div>
-      <div class="feed-tab" id="tab-following">👥 Following</div>
-      <div class="feed-tab" id="tab-premium">💎 Премиум</div>
-    </div>
-  </div>
-  <div class="feed-wrap" id="feed-wrap"></div>
-</div>
-
-<div id="page-search" class="page">
-  <div class="page-header"><div class="page-title">ТЪРСИ</div></div>
-  <div class="search-box"><i data-lucide="search"></i><input type="text" id="search-inp" placeholder="Търси творец, видео или #таг..."></div>
-  <div id="search-list"></div>
-</div>
-
-<div id="page-inbox" class="page">
-  <div class="page-header"><div class="page-title">ИЗВЕСТИЯ</div></div>
-  <div id="inbox-list"></div>
-</div>
-
-<div id="page-profile" class="page">
-  <div class="page-header">
-    <div class="page-title">ПРОФИЛ</div>
-    <button class="icon-btn" id="menu-open-btn"><i data-lucide="menu"></i></button>
-  </div>
-  <div id="profile-body"></div>
-</div>
-
-<div id="page-creator" class="page">
-  <div class="page-header">
-    <div class="page-title">CREATOR ПАНЕЛ</div>
-    <button class="icon-btn" id="creator-close-btn"><i data-lucide="x"></i></button>
-  </div>
-  <div class="creator-panel-tabs">
-    <button class="cptab active" data-tab="cp-dashboard">📊 Табло</button>
-    <button class="cptab" data-tab="cp-content">🎬 Съдържание</button>
-    <button class="cptab" data-tab="cp-subs">💎 Абонаменти</button>
-    <button class="cptab" data-tab="cp-settings">⚙️ Настройки</button>
-  </div>
-  <div id="cp-dashboard" class="cp-section active">
-    <div class="cp-stat-grid">
-      <div class="cp-stat"><div class="cp-stat-val" id="cp-val-views">0</div><div class="cp-stat-label">Гледания</div></div>
-      <div class="cp-stat"><div class="cp-stat-val" id="cp-val-followers">0</div><div class="cp-stat-label">Последователи</div></div>
-      <div class="cp-stat"><div class="cp-stat-val" id="cp-val-videos">0</div><div class="cp-stat-label">Видеа</div></div>
-      <div class="cp-stat"><div class="cp-stat-val" id="cp-val-likes">0</div><div class="cp-stat-label">Харесвания</div></div>
-    </div>
-    <div class="sec-label" style="padding:0 0 8px">🏆 Най-добро видео</div>
-    <div id="cp-best-video" style="color:var(--text2);font-size:.83rem">Все още нямаш видеа</div>
-  </div>
-  <div id="cp-content" class="cp-section"><div id="cp-videos-list"></div></div>
-  <div id="cp-subs" class="cp-section">
-    <div style="background:var(--card);border:1px solid var(--border2);border-radius:12px;padding:16px;margin-bottom:12px">
-      <div style="font-size:1.6rem;font-weight:900;color:var(--gold)">5€ / месец</div>
-      <div style="font-size:.72rem;color:var(--text2);margin-bottom:12px">Твоята абонаментна цена</div>
-    </div>
-    <button class="btn-gold" onclick="showToast('Скоро!')">✏️ Промени цената</button>
-  </div>
-  <div id="cp-settings" class="cp-section">
-    <div class="cp-setting-row" id="cp-set-profile"><span class="cp-setting-label">👤 Редактирай профил</span><span style="color:var(--text3)">›</span></div>
-    <div class="cp-setting-row" id="cp-set-payout"><span class="cp-setting-label">💳 Метод на изплащане</span><span style="color:var(--text3)">›</span></div>
-    <div class="cp-setting-row" id="cp-set-terms"><span class="cp-setting-label">📄 Условия за ползване</span><span style="color:var(--text3)">›</span></div>
-  </div>
-</div>
-
-<div id="creator-profile-modal" class="creator-profile-modal">
-  <div class="creator-profile-header">
-    <button class="creator-profile-back" id="creator-profile-back-btn"><i data-lucide="arrow-left"></i> Назад</button>
-    <div style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;color:var(--gold);letter-spacing:2px" id="creator-profile-title">ПРОФИЛ</div>
-  </div>
-  <div id="creator-profile-body" style="padding-bottom:30px"></div>
-</div>
-
-<nav class="botnav">
-  <button class="bn active" id="bn-feed"><i data-lucide="house"></i><span>Начало</span></button>
-  <button class="bn" id="bn-search"><i data-lucide="search"></i><span>Търси</span></button>
-  <div class="bn-plus-wrap" id="bn-upload"><div class="bn-plus"><i data-lucide="plus"></i></div><span>Качи</span></div>
-  <button class="bn" id="bn-inbox"><i data-lucide="bell"></i><span>Известия</span><div class="bn-badge" id="inbox-badge">0</div></button>
-  <button class="bn" id="bn-profile"><i data-lucide="user"></i><span>Профил</span></button>
-</nav>
-
-<div class="modal" id="m-comments">
-  <div class="mbox"><div class="mhandle" id="handle-comments"></div><div class="mtitle">Коментари</div><div class="cmt-list" id="cmt-list"></div><div class="cmt-input"><input type="text" id="cmt-inp" placeholder="Добави коментар..."><button class="cmt-send" id="cmt-send-btn"><i data-lucide="send" style="width:18px;height:18px;stroke:var(--gold);stroke-width:2;fill:none"></i></button></div></div>
-</div>
-
-<div class="modal" id="m-msg">
-  <div class="mbox"><div class="mhandle" id="handle-msg"></div><div class="mtitle" id="msg-title">Съобщение</div><div class="msg-list" id="msg-list"></div><div class="msg-input-row"><input type="text" id="msg-inp" placeholder="Напиши съобщение..."><button class="msg-send" id="msg-send-btn"><i data-lucide="send" style="width:18px;height:18px;stroke:var(--gold);stroke-width:2;fill:none"></i></button></div></div>
-</div>
-
-<div class="modal" id="m-upload">
-  <div class="mbox">
-    <div class="mhandle" id="handle-upload"></div>
-    <div class="mtitle">Качи видео</div>
-    <div class="dropzone" id="upl-dz"><input type="file" id="upl-inp" style="display:none" accept="video/*"><div class="dz-ico">🎬</div><div class="dz-title">Избери видео</div><div class="dz-sub">MP4, MOV — до 4GB</div></div>
-    <div class="file-info" id="upl-fi"><span>🎬</span><div style="flex:1;min-width:0"><div id="upl-fi-name" style="font-weight:600;font-size:.82rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)"></div><div id="upl-fi-size" style="font-size:.67rem;color:var(--text2)"></div></div><button class="file-rm" id="upl-fi-rm">✕</button></div>
-    <div class="fg"><label class="fl">Заглавие *</label><input type="text" class="fi" id="upl-title" placeholder="Заглавие на видеото"></div>
-    <div class="fg"><label class="fl">Описание и тагове</label><textarea class="fi" id="upl-desc" rows="3" placeholder="Разкажи... използвай #тагове"></textarea></div>
-    <div class="fg">
-      <label class="fl">💰 Монетизация</label>
-      <div class="mono-type">
-        <div class="mono-opt selected" data-val="free"><div class="mono-opt-radio"><div class="mono-opt-radio-dot"></div></div><span class="mono-opt-label">🌍 Безплатно</span><span class="mono-opt-sub">Всички гледат</span></div>
-        <div class="mono-opt" data-val="paid"><div class="mono-opt-radio"><div class="mono-opt-radio-dot"></div></div><span class="mono-opt-label">💰 Платено</span><span class="mono-opt-sub">еднократно</span></div>
-        <div class="mono-opt" data-val="subscribers"><div class="mono-opt-radio"><div class="mono-opt-radio-dot"></div></div><span class="mono-opt-label">💎 Само абонати</span><span class="mono-opt-sub">месечно</span></div>
-      </div>
-    </div>
-    <div class="upl-prog" id="upl-prog"><div style="display:flex;justify-content:space-between;font-size:.8rem;margin-bottom:4px;color:var(--text)"><span>Качване...</span><span id="upl-pct" style="color:var(--gold);font-weight:700">0%</span></div><div class="upl-bar-bg"><div class="upl-bar" id="upl-bar"></div></div></div>
-    <div class="upl-suc" id="upl-suc"><div style="font-size:1.8rem;margin-bottom:6px">✅</div><div style="font-weight:700;color:var(--gold)">Качено успешно!</div></div>
-    <div id="upl-act"><button class="btn-gold" id="upl-go-btn">🚀 Публикувай</button><button class="btn-ghost" id="upl-cancel-btn">Откажи</button></div>
-  </div>
-</div>
-
-<div class="modal" id="m-auth">
-  <div class="mbox">
-    <div class="mhandle" id="handle-auth"></div>
-    <div class="auth-switch"><button class="auth-sw-btn active" id="sw-login">Вход</button><button class="auth-sw-btn" id="sw-register">Регистрация</button></div>
-    <div id="auth-login">
-      <div class="fg"><label class="fl">Имейл</label><input type="email" class="fi" id="l-email" placeholder="email@example.com"></div>
-      <div class="fg"><label class="fl">Парола</label><input type="password" class="fi" id="l-pass" placeholder="Паролата ти"></div>
-      <div class="ferr" id="l-err"></div>
-      <button class="btn-gold" id="l-btn">Вход →</button>
-    </div>
-    <div id="auth-register" style="display:none">
-      <div class="fg"><label class="fl">Пълно Име</label><input type="text" class="fi" id="r-name" placeholder="Виктор Александров"></div>
-      <div class="fg"><label class="fl">Имейл</label><input type="email" class="fi" id="r-email" placeholder="email@example.com"></div>
-      <div class="fg"><label class="fl">Парола</label><input type="password" class="fi" id="r-pass" placeholder="Мин. 8 символа"></div>
-      <div class="ferr" id="r-err"></div>
-      <button class="btn-gold" id="r-btn">Създай акаунт →</button>
-    </div>
-  </div>
-</div>
-
-<div class="modal" id="m-edit-profile">
-  <div class="mbox"><div class="mhandle" id="handle-edit"></div><div class="mtitle">Редактирай профил</div><div class="fg"><label class="fl">Показвано Име</label><input type="text" class="fi" id="edit-name" placeholder="Виктор Александров"></div><div class="fg"><label class="fl">Биография</label><textarea class="fi" id="edit-bio" rows="3" placeholder="Разкажи за себе си..."></textarea></div><button class="btn-gold" id="edit-save-btn">Запази</button><button class="btn-ghost" id="edit-cancel-btn">Откажи</button></div>
-</div>
-
-<div class="modal" id="m-menu">
-  <div class="mbox">
-    <div class="mhandle" id="handle-menu"></div>
-    <div class="menu-item" id="m-creator-panel"><i data-lucide="layout-dashboard"></i><span class="menu-item-label">Creator Панел</span><span class="menu-item-arrow">›</span></div>
-    <div class="menu-item" id="m-theme"><i data-lucide="sun"></i><span class="menu-item-label" id="m-theme-label">Светла тема</span><span class="menu-item-arrow">›</span></div>
-    <div class="menu-item" id="m-terms"><i data-lucide="file-text"></i><span class="menu-item-label">Условия за ползване</span><span class="menu-item-arrow">›</span></div>
-    <div class="menu-item" id="m-privacy"><i data-lucide="shield"></i><span class="menu-item-label">Поверителност</span><span class="menu-item-arrow">›</span></div>
-    <div class="menu-item" id="m-contact"><i data-lucide="mail"></i><span class="menu-item-label">Контакт</span><span class="menu-item-arrow">›</span></div>
-    <div class="menu-item" id="m-about"><i data-lucide="info"></i><span class="menu-item-label">За нас</span><span class="menu-item-arrow">›</span></div>
-    <div class="menu-item menu-danger" id="m-logout"><i data-lucide="log-out"></i><span class="menu-item-label">Изход</span></div>
-  </div>
-</div>
-
-<div class="toast" id="toast"></div>
 
 <script src="js/config.js"></script>
+
 <script src="js/supabase.js"></script>
+
 <script src="js/auth.js"></script>
 <script src="js/notifications.js"></script>
 <script src="js/messages.js"></script>
@@ -187,7 +15,10 @@
 <script src="js/upload.js"></script>
 <script src="js/player.js"></script>
 <script src="js/feed.js"></script>
+
 <script src="js/app.js"></script>
 
-</body>
-</html>
+<script>
+  // Инициализира иконите Lucide (важно е да е тук)
+  lucide.createIcons();
+</script>
