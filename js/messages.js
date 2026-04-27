@@ -1,15 +1,11 @@
-async function loadMessages() {
-    const container = document.getElementById('messages-container');
-    if (!container) return;
-    
-    container.innerHTML = '<div class="empty-state">Нямате нови съобщения</div>';
-    
-    const { data: messages, error } = await _supabase
-        .from('messages')
-        .select('*')
-        .or(`sender_id.eq.${currentUser.id},receiver_id.eq.${currentUser.id}`);
-        
-    if (messages && messages.length > 0) {
-        // Логика за рендериране на съобщенията
-    }
+async function sendComment() {
+  var inp = el('cmt-inp');
+  if(!inp.value.trim() || !STATE.user) return;
+  await _supabase.from('comments').insert([{
+    video_id: STATE.currentCmtVid,
+    user_id: STATE.user.id,
+    content: inp.value.trim()
+  }]);
+  inp.value = '';
+  showComments(STATE.currentCmtVid);
 }
