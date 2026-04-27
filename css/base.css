@@ -1,0 +1,17 @@
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;overflow:hidden;font-family:'Inter',sans-serif}
+:root{
+  --bg:#0a0a0a;--surface:#111;--card:#181818;
+  --text:#fff;--text2:rgba(255,255,255,.6);--text3:rgba(255,255,255,.3);
+  --border:rgba(255,255,255,.07);--border2:rgba(255,255,255,.12);
+  --gold:#c9a84c;--gold2:#e8c96d;--gold-dim:rgba(201,168,76,.12);
+  --nav-bg:rgba(10,10,10,.92);--nav-border:rgba(201,168,76,.2);
+  --red:#e8192c;
+}
+body{background:var(--bg);color:var(--text)}
+.page{display:none;position:fixed;inset:0;z-index:1;background:var(--bg)}
+.page.active{display:block}
+.logo{font-family:'Bebas Neue',sans-serif;font-size:1.6rem;letter-spacing:3px;background:linear-gradient(135deg,#c9a84c,#e8c96d);-webkit-background-clip:text;-webkit-text-fill-color:transparent;line-height:1}
+@keyframes sup{from{transform:translateY(30px);opacity:0}to{transform:translateY(0);opacity:1}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes heartPop{0%{transform:translate(-50%,-50%) scale(0);opacity:1}50%{transform:translate(-50%,-50%) scale(1.4);opacity:1}100%{transform:translate(-50%,-50%) scale(1);opacity:0}}
