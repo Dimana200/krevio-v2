@@ -1,27 +1,42 @@
-el('search-inp').oninput = async function() {
-  var q = this.value.trim();
-  if (q.length < 2) { el('search-list').innerHTML = ''; return; }
-  
-  var { data, error } = await _supabase
-    .from('profiles')
-    .select('*')
-    .ilike('full_name', `%${q}%`)
-    .limit(20);
+function searchByTag(tag){
+  showPage('search');
+  var inp=el('search-inp');
+  if(inp){inp.value=tag;inp.dispatchEvent(new Event('input'));}
+}
 
-  var list = el('search-list');
-  if (data && data.length > 0) {
-    list.innerHTML = data.map(p => `
-      <div class="user-row" onclick="openCreatorProfile('${p.id}')" style="display:flex;align-items:center;padding:12px 16px;gap:12px;border-bottom:1px solid var(--border)">
-        <img src="${p.avatar_url || 'https://api.dicebear.com/7.x/avataaars/svg?seed='+p.id}" style="width:44px;height:44px;border-radius:50%">
-        <div style="flex:1">
-          <div style="font-weight:700;font-size:.9rem">${p.full_name}</div>
-          <div style="font-size:.75rem;color:var(--text2)">@${p.username}</div>
-        </div>
-        <i data-lucide="chevron-right" style="width:16px;color:var(--text3)"></i>
-      </div>
-    `).join('');
-    if (window.lucide) lucide.createIcons();
-  } else {
-    list.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text3)">Няма намерени резултати</div>';
+async function renderSearch(){
+  var wrap=el('search-list');if(!wrap||!STATE.sb)return;
+  try{var r=await STATE.sb.from('profiles').select('*').limit(20);renderSearchResults(r.data||[],[]);}catch(e){}
+  var inp=el('search-inp');if(!inp)return;
+  inp.oninput=async function(){
+    var q=this.value.trim();
+    if(!q){try{var r=await STATE.sb.from('profiles').select('*').limit(20);renderSearchResults(r.data||[],[]);}catch(e){}return;}
+    try{
+      var rp=await STATE.sb.from('profiles').select('*').or('name.ilike.%'+q+'%').limit(10);
+      var rv=await STATE.sb.from('videos').select('*').or('title.ilike.%'+q+'%,description.ilike.%'+q+'%').limit(15);
+      renderSearchResults(rp.data||[],rv.data||[]);
+    }catch(e){}
+  };
+}
+
+function renderSearchResults(profiles,videos){
+  var wrap=el('search-list');if(!wrap)return;wrap.innerHTML='';var has=false;
+  if(profiles&&profiles.length>0){
+    has=true;var lbl=mk('div','sec-label');lbl.textContent='Творци';wrap.appendChild(lbl);
+    profiles.forEach(function(c){
+      var row=mk('div','creator-row');var av=mk('div','cr-avatar');
+      if(c.avatar_url){var img=document.createElement('img');img.src=c.avatar_url;av.appendChild(img);}else av.textContent='👤';
+      var inf=mk('div');inf.style.flex='1';var nm=mk('div','cr-name');nm.textContent=c.name||'Потребител';inf.appendChild(nm);
+      row.appendChild(av);row.appendChild(inf);row.onclick=function(){openCreatorProfile(c.id);};wrap.appendChild(row);
+    });
   }
-};
+  if(videos&&videos.length>0){
+    has=true;var lbl2=mk('div','sec-label');lbl2.textContent='Видеа';wrap.appendChild(lbl2);
+    videos.forEach(function(v){
+      var row=mk('div','creator-row');var av=mk('div','cr-avatar');av.textContent='🎬';
+      var inf=mk('div');inf.style.flex='1';var nm=mk('div','cr-name');nm.textContent=v.title;inf.appendChild(nm);
+      row.appendChild(av);row.appendChild(inf);row.onclick=function(){openVideoFromGrid(v);};wrap.appendChild(row);
+    });
+  }
+  if(!has)wrap.innerHTML="<div style='padding:30px;text-align:center;color:var(--text2)'>Няма резултати</div>";
+}
