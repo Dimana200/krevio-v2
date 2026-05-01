@@ -1,42 +1,34 @@
-// ====== ИЗТРИВАНЕ НА ВИДЕО ======
+// ====== ИЗТРИВАНЕ НА ВИДЕО (Supabase + R2) ======
 async function deleteVideo(v, cell, grid) {
   if (!STATE.sb || !STATE.user) return;
-
-  // 1. Изтрий от Supabase
   try {
-    var dr = await STATE.sb.from('videos').delete().eq('id', v.id).eq('user_id', STATE.user.id);
-    if (dr.error) { showToast('Грешка: ' + dr.error.message); return; }
+    var sess = await STATE.sb.auth.getSession();
+    var token = sess.data && sess.data.session ? sess.data.session.access_token : null;
+    if (!token) { showToast('Не си влязъл!'); return; }
+
+    var r = await fetch(CONFIG.API_URL + '/delete-video', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: token, videoId: v.id, fileUrl: v.file_url })
+    });
+    var data = await r.json();
+    if (!r.ok) { showToast('Грешка: ' + (data.error || r.status)); return; }
   } catch (e) { showToast('Грешка при изтриване!'); return; }
 
-  // 2. Изтрий файла от R2 през Railway backend
-  if (v.file_url) {
-    try {
-      await fetch(CONFIG.API_URL + '/api/delete-video', {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ videoId: v.id, fileUrl: v.file_url })
-      });
-    } catch (e) { /* R2 грешката не е фатална */ }
-  }
-
-  // 3. Премахни клетката от DOM с анимация
   cell.style.transition = 'opacity .3s, transform .3s';
   cell.style.opacity = '0';
   cell.style.transform = 'scale(0.8)';
   setTimeout(function () {
     try { grid.removeChild(cell); } catch (e) { }
-    // Ако грида е празен — покажи съобщение
     if (grid.querySelectorAll('.vg-cell').length === 0) {
       grid.innerHTML = "<div style='grid-column:1/-1;padding:30px;text-align:center;color:var(--text2)'>Все още нямаш видеа</div>";
     }
   }, 300);
-
   showToast('🗑️ Видеото е изтрито');
 }
 
 // ====== ОТВАРЯНЕ НА ВИДЕО ОТ ГРИДА ======
 function openVideoFromGrid(v) {
-  STATE.prevPage = document.querySelector('.page.active') ? document.querySelector('.page.active').id.replace('page-', '') : null;
   showPage('feed');
   STATE.currentTab = 'trending'; resetFeed();
   var wrap = el('feed-wrap');
@@ -56,7 +48,6 @@ function buildVideoGrid(videos, emptyMsg, allowDelete) {
     videos.forEach(function (v) {
       var cell = mk('div', 'vg-cell');
 
-      // Thumbnail / video preview
       if (v.thumbnail_url) {
         var img = document.createElement('img'); img.src = v.thumbnail_url; cell.appendChild(img);
       } else {
@@ -72,7 +63,6 @@ function buildVideoGrid(videos, emptyMsg, allowDelete) {
       if (v.access_level && v.access_level !== 'free') { var vb = mk('div', 'vg-badge'); vb.textContent = '🔒'; info.appendChild(vb); }
       cell.appendChild(info);
 
-      // ---- LONG PRESS → DELETE (само за собствените видеа) ----
       if (allowDelete) {
         var pressTimer = null;
         var deleteShown = false;
@@ -108,14 +98,12 @@ function buildVideoGrid(videos, emptyMsg, allowDelete) {
         cell.addEventListener('touchstart', function () {
           pressTimer = setTimeout(function () { showDeleteOverlay(); }, 600);
         }, { passive: true });
-        cell.addEventListener('touchend',   function () { clearTimeout(pressTimer); }, { passive: true });
-        cell.addEventListener('touchmove',  function () { clearTimeout(pressTimer); }, { passive: true });
-
-        // На desktop — десен клик
+        cell.addEventListener('touchend',  function () { clearTimeout(pressTimer); }, { passive: true });
+        cell.addEventListener('touchmove', function () { clearTimeout(pressTimer); }, { passive: true });
         cell.addEventListener('contextmenu', function (e) { e.preventDefault(); showDeleteOverlay(); });
 
-        cell.onclick = function (e) {
-          if (deleteShown) return;   // ако е показан overlay — не отваряй видеото
+        cell.onclick = function () {
+          if (deleteShown) return;
           openVideoFromGrid(v);
         };
       } else {
@@ -195,12 +183,11 @@ async function renderProfile() {
   if (STATE.sb) { try { var sv = await STATE.sb.from('saves').select('video_id').eq('user_id', STATE.user.id); var sids = (sv.data || []).map(function (s) { return s.video_id; }); if (sids.length) { var svv = await STATE.sb.from('videos').select('*').in('id', sids); savedVids = svv.data || []; } } catch (e) { } }
   var premVids = myVids.filter(function (v) { return v.access_level && v.access_level !== 'free'; });
 
-  // allowDelete = true само за собствените видеа (таб 0 и таб 3)
   [
-    { vids: myVids,    msg: 'Все още нямаш видеа',       del: true  },
-    { vids: likedVids, msg: 'Не си харесал видеа',        del: false },
-    { vids: savedVids, msg: 'Нямаш запазени',             del: false },
-    { vids: premVids,  msg: 'Нямаш премиум съдържание',   del: true  }
+    { vids: myVids,    msg: 'Все още нямаш видеа',     del: true  },
+    { vids: likedVids, msg: 'Не си харесал видеа',      del: false },
+    { vids: savedVids, msg: 'Нямаш запазени',           del: false },
+    { vids: premVids,  msg: 'Нямаш премиум съдържание', del: true  }
   ].forEach(function (cfg, idx) {
     var g = buildVideoGrid(cfg.vids, cfg.msg, cfg.del);
     g.style.display = idx === 0 ? 'grid' : 'none';
@@ -214,7 +201,6 @@ async function renderProfile() {
     };
   });
 
-  // Hint за потребителя
   var hint = mk('div');
   hint.style.cssText = 'text-align:center;font-size:.72rem;color:var(--text3);padding:8px 0 16px;opacity:.6';
   hint.textContent = '💡 Задръж върху видео за да го изтриеш';
