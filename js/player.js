@@ -47,13 +47,17 @@ async function loadSaveState(videoId, btn) {
 }
 
 function buildCard(v, i) {
-  var profile = STATE.profileCache[v.user_id] || null;
-  var cName = profile ? (profile.name || 'Потребител') : (v.creator_name || 'Потребител');
-  var cAvatar = profile ? profile.avatar_url : null;
-  var isPaid = v.access_level && v.access_level !== 'free';
-  var tags = parseTags(v.description);
-  var item = mk('div', 'video-item');
+  // ---- GUARD: пропусни видео без URL ----
+  if (!v.file_url) return null;
 
+  var profile = STATE.profileCache[v.user_id] || null;
+  var cName   = profile ? (profile.name || 'Потребител') : (v.creator_name || 'Потребител');
+  var cAvatar = profile ? profile.avatar_url : null;
+  var isPaid  = v.access_level && v.access_level !== 'free';
+  var tags    = parseTags(v.description);
+  var item    = mk('div', 'video-item');
+
+  // ---- VIDEO ELEMENT ----
   var vid = document.createElement('video');
   vid.className = 'v-player';
   vid.loop = true; vid.muted = true; vid.playsInline = true; vid.preload = 'none';
@@ -61,11 +65,24 @@ function buildCard(v, i) {
   item.appendChild(vid);
   item.appendChild(mk('div', 'v-gradient'));
 
-  var loadDiv = mk('div', 'v-loading'); loadDiv.appendChild(mk('div', 'v-spinner')); item.appendChild(loadDiv);
+  // ---- LOADING SPINNER ----
+  var loadDiv = mk('div', 'v-loading');
+  loadDiv.appendChild(mk('div', 'v-spinner'));
+  item.appendChild(loadDiv);
   vid.addEventListener('loadeddata', function () { loadDiv.style.display = 'none'; });
-  vid.addEventListener('waiting', function () { loadDiv.style.display = 'flex'; });
-  vid.addEventListener('playing', function () { loadDiv.style.display = 'none'; });
+  vid.addEventListener('waiting',    function () { loadDiv.style.display = 'flex'; });
+  vid.addEventListener('playing',    function () { loadDiv.style.display = 'none'; });
 
+  // ---- VIDEO ERROR — показва placeholder вместо черен екран ----
+  vid.addEventListener('error', function () {
+    loadDiv.style.display = 'none';
+    var errDiv = mk('div', 'v-error-state');
+    errDiv.innerHTML = "<div style='font-size:2rem;margin-bottom:8px'>⚠️</div><div style='font-size:.8rem;color:rgba(255,255,255,.5)'>Видеото не може да се зареди</div>";
+    errDiv.style.cssText = 'position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:4;pointer-events:none';
+    item.insertBefore(errDiv, item.firstChild);
+  });
+
+  // ---- PLAY / PAUSE OVERLAY ----
   var playOv = mk('div', 'v-play-overlay');
   var playCirc = mk('div', 'v-play-circle');
   playCirc.innerHTML = "<svg viewBox='0 0 24 24' style='width:24px;height:24px;fill:#c9a84c;margin-left:3px'><polygon points='6,3 20,12 6,21'/></svg>";
@@ -76,11 +93,12 @@ function buildCard(v, i) {
   pauseCirc.innerHTML = "<svg viewBox='0 0 24 24' style='width:24px;height:24px;fill:#c9a84c'><rect x='6' y='4' width='4' height='16'/><rect x='14' y='4' width='4' height='16'/></svg>";
   pauseOv.appendChild(pauseCirc); item.appendChild(pauseOv);
 
+  // ---- SCRUBBER ----
   var scrubber = mk('div', 'v-scrubber');
-  var track = mk('div', 'v-scrubber-track');
-  var bufBar = mk('div', 'v-scrubber-buf');
-  var fillBar = mk('div', 'v-scrubber-fill');
-  var thumb = mk('div', 'v-scrubber-thumb');
+  var track    = mk('div', 'v-scrubber-track');
+  var bufBar   = mk('div', 'v-scrubber-buf');
+  var fillBar  = mk('div', 'v-scrubber-fill');
+  var thumb    = mk('div', 'v-scrubber-thumb');
   track.appendChild(bufBar); track.appendChild(fillBar); track.appendChild(thumb);
   scrubber.appendChild(track); item.appendChild(scrubber);
 
@@ -93,12 +111,12 @@ function buildCard(v, i) {
   vid.addEventListener('timeupdate', function () {
     if (vid.duration) {
       var pct = vid.currentTime / vid.duration * 100;
-      fillBar.style.width = pct + '%';
-      thumb.style.left = pct + '%';
+      fillBar.style.width = pct + '%'; thumb.style.left = pct + '%';
       timeDisp.textContent = fmtDur(vid.currentTime) + ' / ' + fmtDur(vid.duration);
     }
   });
 
+  // ---- SCRUB TOUCH ----
   var scrubbing = false; var wasPaused = false;
   function getScrubPct(e) {
     var rect = track.getBoundingClientRect();
@@ -120,6 +138,7 @@ function buildCard(v, i) {
     if (!wasPaused) vid.play().catch(function () { });
   }, { passive: true });
 
+  // ---- MUTE BUTTON ----
   var muteBtn = mk('div', 'v-mute'); muteBtn.textContent = '🔇'; item.appendChild(muteBtn);
   muteBtn.addEventListener('click', function (e) {
     e.stopPropagation(); STATE.audioUnlocked = true; vid.muted = !vid.muted;
@@ -127,9 +146,11 @@ function buildCard(v, i) {
     document.querySelectorAll('.v-player').forEach(function (vv) { vv.muted = vid.muted; });
   });
 
+  // ---- TAP / DOUBLE TAP ON VIDEO ----
   var lastTap = 0; var tapTimeout = null;
   vid.addEventListener('click', function (e) {
-    e.stopPropagation(); var now = Date.now();
+    e.stopPropagation();
+    var now = Date.now();
     if (now - lastTap < 300) {
       clearTimeout(tapTimeout); lastTap = 0;
       if (STATE.user) {
@@ -145,13 +166,22 @@ function buildCard(v, i) {
     lastTap = now;
     tapTimeout = setTimeout(function () {
       lastTap = 0;
-      if (!STATE.audioUnlocked) { STATE.audioUnlocked = true; vid.muted = false; muteBtn.textContent = '🔊'; document.querySelectorAll('.v-player').forEach(function (vv) { vv.muted = false; }); return; }
+      if (!STATE.audioUnlocked) {
+        STATE.audioUnlocked = true; vid.muted = false; muteBtn.textContent = '🔊';
+        document.querySelectorAll('.v-player').forEach(function (vv) { vv.muted = false; }); return;
+      }
       if (STATE.isFullscreen) { toggleFullscreen(); return; }
-      if (vid.paused) { vid.play().catch(function () { vid.muted = true; vid.play().catch(function () { }); }); playOv.classList.add('show'); setTimeout(function () { playOv.classList.remove('show'); }, 500); }
-      else { vid.pause(); pauseOv.classList.add('show'); setTimeout(function () { pauseOv.classList.remove('show'); }, 500); }
+      if (vid.paused) {
+        vid.play().catch(function () { vid.muted = true; vid.play().catch(function () { }); });
+        playOv.classList.add('show'); setTimeout(function () { playOv.classList.remove('show'); }, 500);
+      } else {
+        vid.pause();
+        pauseOv.classList.add('show'); setTimeout(function () { pauseOv.classList.remove('show'); }, 500);
+      }
     }, 300);
   });
 
+  // ---- INTERSECTION OBSERVER ----
   var obs = new IntersectionObserver(function (entries) {
     if (entries[0].isIntersecting) {
       STATE.currentVideoId = v.id;
@@ -164,13 +194,16 @@ function buildCard(v, i) {
       cleanupVideos(myIdx);
       var nextItem = allItems[myIdx + 1];
       if (nextItem) { var nv2 = nextItem.querySelector('.v-player'); if (nv2 && !nv2.src && nv2._src) { nv2.src = nv2._src; nv2.preload = 'metadata'; } }
-    } else { vid.pause(); vid.currentTime = 0; stopViewTimer(v.id); }
+    } else {
+      vid.pause(); vid.currentTime = 0; stopViewTimer(v.id);
+    }
   }, { threshold: 0.5 });
   obs.observe(item); item._obs = obs;
 
+  // ---- PAID LOCK OVERLAY ----
   if (isPaid) {
     var lk = mk('div', 'locked-ov');
-    var lb = mk('div', 'locked-badge'); lb.textContent = '💎 ПРЕМИУМ СЪДЪРЖАНИЕ'; lk.appendChild(lb);
+    var lb2 = mk('div', 'locked-badge'); lb2.textContent = '💎 ПРЕМИУМ СЪДЪРЖАНИЕ'; lk.appendChild(lb2);
     var lt = mk('div', 'locked-title'); lt.textContent = v.title || 'Ексклузивно видео'; lk.appendChild(lt);
     var lp = mk('div', 'locked-price'); lp.textContent = v.access_level === 'fan' ? '2.50€' : v.access_level === 'studio' ? '5€' : '12€'; lk.appendChild(lp);
     var ls = mk('div', 'locked-sub'); ls.textContent = 'еднократно плащане'; lk.appendChild(ls);
@@ -180,24 +213,49 @@ function buildCard(v, i) {
     lbtns.appendChild(lprev); lbtns.appendChild(lunl); lk.appendChild(lbtns); item.appendChild(lk);
   }
 
+  // ---- INFO ZONE ----
   var info = mk('div', 'v-info-zone');
   var cbar = mk('div', 'v-creator-bar');
+
+  // AVATAR — stopPropagation за да не прихваща video click handler-ът
   var av = mk('div', 'v-avatar');
-  if (cAvatar) { var ai = document.createElement('img'); ai.src = cAvatar + '?t=1'; ai.onerror = function () { av.textContent = '🎬'; try { av.removeChild(ai); } catch (e) { } }; av.appendChild(ai); }
-  else av.textContent = '🎬';
-  av.onclick = function () { openCreatorProfile(v.user_id); };
+  if (cAvatar) {
+    var ai = document.createElement('img');
+    ai.src = cAvatar + '?t=1';
+    ai.onerror = function () { av.textContent = '🎬'; try { av.removeChild(ai); } catch (e) { } };
+    av.appendChild(ai);
+  } else {
+    av.textContent = '🎬';
+  }
+  av.addEventListener('click', function (e) {
+    e.stopPropagation();   // ← КЛЮЧОВО: спира видео tap handler-а
+    e.preventDefault();
+    openCreatorProfile(v.user_id);
+  });
+
   var cinfo = mk('div', 'v-creator-info');
+
+  // CREATOR NAME — също отваря профила
   var cn = mk('div', 'v-creator-name'); cn.textContent = cName;
+  cn.style.cursor = 'pointer';
+  cn.addEventListener('click', function (e) {
+    e.stopPropagation();
+    openCreatorProfile(v.user_id);
+  });
+
   var cacts = mk('div', 'v-creator-actions');
   if (!STATE.user || v.user_id !== STATE.user.id) {
     var fb = mk('button', 'v-follow-btn'); var isF = STATE.following[v.user_id] || false;
     fb.textContent = isF ? '✓ Следваш' : 'Следвай'; if (isF) fb.classList.add('following');
-    fb.onclick = function (e) { e.stopPropagation(); toggleFollow(v.user_id, fb); }; cacts.appendChild(fb);
+    fb.onclick = function (e) { e.stopPropagation(); toggleFollow(v.user_id, fb); };
+    cacts.appendChild(fb);
   }
   var sub = mk('button', 'v-sub-btn'); sub.textContent = '💎 Абонирай'; if (isPaid) sub.classList.add('visible');
-  sub.onclick = function () { if (!STATE.user) { openModal('m-auth'); return; } showToast('Скоро!'); }; cacts.appendChild(sub);
+  sub.onclick = function () { if (!STATE.user) { openModal('m-auth'); return; } showToast('Скоро!'); };
+  cacts.appendChild(sub);
   cinfo.appendChild(cn); cinfo.appendChild(cacts); cbar.appendChild(av); cbar.appendChild(cinfo); info.appendChild(cbar);
 
+  // TITLE + DESC
   if (v.title || v.description) {
     var tb = mk('div', 'v-text-block'); var exp = false;
     if (v.title) { var ti = mk('div', 'v-title-text'); ti.textContent = v.title; tb.appendChild(ti); }
@@ -205,14 +263,18 @@ function buildCard(v, i) {
     tb.onclick = function () { exp = !exp; tb.querySelectorAll('.v-title-text,.v-desc-text').forEach(function (e) { e.classList.toggle('expanded', exp); }); };
     info.appendChild(tb);
   }
+
+  // TAGS
   if (tags.length > 0) {
     var tagsDiv = mk('div', 'v-tags');
     tags.forEach(function (tag) { var t = mk('span', 'v-tag'); t.textContent = tag; t.onclick = function (e) { e.stopPropagation(); searchByTag(tag); }; tagsDiv.appendChild(t); });
     info.appendChild(tagsDiv);
   }
 
+  // ACTION BAR
   var abar = mk('div', 'v-action-bar');
-  var likeBtn = mk('button', 'v-act'); var likeIco = ico('heart', 20); var likeCnt = mk('span'); likeCnt.textContent = '0'; likeBtn.appendChild(likeIco); likeBtn.appendChild(likeCnt);
+  var likeBtn = mk('button', 'v-act'); var likeIco = ico('heart', 20); var likeCnt = mk('span'); likeCnt.textContent = '0';
+  likeBtn.appendChild(likeIco); likeBtn.appendChild(likeCnt);
   likeBtn.onclick = async function () {
     if (!STATE.user) { showToast('Влез за да харесаш!'); return; }
     var isLiked = likeBtn.classList.contains('liked');
@@ -236,14 +298,28 @@ function buildCard(v, i) {
   abar.appendChild(saveBtn); loadSaveState(v.id, saveBtn);
 
   var msgBtn = mk('button', 'v-act'); msgBtn.appendChild(ico('message-square', 20));
-  msgBtn.onclick = function () { if (!STATE.user) { showToast('Влез за да пишеш!'); return; } if (!STATE.following[v.user_id]) { showToast('Последвай за да пишеш!'); return; } openMessages(v.user_id, cName); };
+  msgBtn.onclick = function () {
+    if (!STATE.user) { showToast('Влез за да пишеш!'); return; }
+    if (!STATE.following[v.user_id]) { showToast('Последвай за да пишеш!'); return; }
+    openMessages(v.user_id, cName);
+  };
   abar.appendChild(msgBtn);
 
   var shareBtn = mk('button', 'v-act'); shareBtn.appendChild(ico('share-2', 20));
-  shareBtn.onclick = function () { if (navigator.share) { navigator.share({ title: v.title, url: v.file_url }); } else if (navigator.clipboard) { navigator.clipboard.writeText(v.file_url).then(function () { showToast('🔗 Копирано!'); }); } else { showToast('🔗 Копирано!'); } };
+  shareBtn.onclick = function () {
+    if (navigator.share) { navigator.share({ title: v.title, url: v.file_url }); }
+    else if (navigator.clipboard) { navigator.clipboard.writeText(v.file_url).then(function () { showToast('🔗 Копирано!'); }); }
+    else { showToast('🔗 Копирано!'); }
+  };
   abar.appendChild(shareBtn);
 
-  if (isPaid) { var unlBtn = mk('button', 'v-act-unlock'); unlBtn.innerHTML = "<i data-lucide='lock' style='width:16px;height:16px;stroke:#000;stroke-width:2;fill:none'></i><span>Отключи</span>"; unlBtn.onclick = function () { openModal('m-auth'); }; abar.appendChild(unlBtn); }
-  info.appendChild(abar); item.appendChild(info);
+  if (isPaid) {
+    var unlBtn = mk('button', 'v-act-unlock');
+    unlBtn.innerHTML = "<i data-lucide='lock' style='width:16px;height:16px;stroke:#000;stroke-width:2;fill:none'></i><span>Отключи</span>";
+    unlBtn.onclick = function () { openModal('m-auth'); };
+    abar.appendChild(unlBtn);
+  }
+  info.appendChild(abar);
+  item.appendChild(info);
   return item;
 }
