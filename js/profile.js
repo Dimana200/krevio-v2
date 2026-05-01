@@ -1,35 +1,136 @@
+// ====== ИЗТРИВАНЕ НА ВИДЕО ======
+async function deleteVideo(v, cell, grid) {
+  if (!STATE.sb || !STATE.user) return;
+
+  // 1. Изтрий от Supabase
+  try {
+    var dr = await STATE.sb.from('videos').delete().eq('id', v.id).eq('user_id', STATE.user.id);
+    if (dr.error) { showToast('Грешка: ' + dr.error.message); return; }
+  } catch (e) { showToast('Грешка при изтриване!'); return; }
+
+  // 2. Изтрий файла от R2 през Railway backend
+  if (v.file_url) {
+    try {
+      await fetch(CONFIG.API_URL + '/api/delete-video', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ videoId: v.id, fileUrl: v.file_url })
+      });
+    } catch (e) { /* R2 грешката не е фатална */ }
+  }
+
+  // 3. Премахни клетката от DOM с анимация
+  cell.style.transition = 'opacity .3s, transform .3s';
+  cell.style.opacity = '0';
+  cell.style.transform = 'scale(0.8)';
+  setTimeout(function () {
+    try { grid.removeChild(cell); } catch (e) { }
+    // Ако грида е празен — покажи съобщение
+    if (grid.querySelectorAll('.vg-cell').length === 0) {
+      grid.innerHTML = "<div style='grid-column:1/-1;padding:30px;text-align:center;color:var(--text2)'>Все още нямаш видеа</div>";
+    }
+  }, 300);
+
+  showToast('🗑️ Видеото е изтрито');
+}
+
+// ====== ОТВАРЯНЕ НА ВИДЕО ОТ ГРИДА ======
 function openVideoFromGrid(v) {
   STATE.prevPage = document.querySelector('.page.active') ? document.querySelector('.page.active').id.replace('page-', '') : null;
-  history.pushState({ page: 'feed', videoId: v.id }, '', window.location.pathname);
-  showPage('feed', false);
+  showPage('feed');
   STATE.currentTab = 'trending'; resetFeed();
   var wrap = el('feed-wrap');
   if (wrap) {
     wrap.innerHTML = '';
-    var card = buildCard(v, 0); wrap.appendChild(card);
+    var card = buildCard(v, 0);
+    if (card) wrap.appendChild(card);
     var sentinel = mk('div', 'load-more'); sentinel.id = 'sentinel'; sentinel.style.display = 'none'; wrap.appendChild(sentinel);
     if (window.lucide) window.lucide.createIcons();
   }
 }
 
-function buildVideoGrid(videos, emptyMsg) {
+// ====== ВИДЕО ГРИД ======
+function buildVideoGrid(videos, emptyMsg, allowDelete) {
   var grid = mk('div', 'vgrid');
   if (videos && videos.length > 0) {
     videos.forEach(function (v) {
       var cell = mk('div', 'vg-cell');
-      if (v.thumbnail_url) { var img = document.createElement('img'); img.src = v.thumbnail_url; cell.appendChild(img); }
-      else { var ve = document.createElement('video'); ve.src = v.file_url; ve.preload = 'metadata'; ve.muted = true; ve.playsInline = true; ve.addEventListener('loadedmetadata', function () { ve.currentTime = 1; }); cell.appendChild(ve); }
+
+      // Thumbnail / video preview
+      if (v.thumbnail_url) {
+        var img = document.createElement('img'); img.src = v.thumbnail_url; cell.appendChild(img);
+      } else {
+        var ve = document.createElement('video');
+        ve.src = v.file_url; ve.preload = 'metadata'; ve.muted = true; ve.playsInline = true;
+        ve.addEventListener('loadedmetadata', function () { ve.currentTime = 1; });
+        cell.appendChild(ve);
+      }
       cell.appendChild(mk('div', 'vg-overlay'));
-      var info = mk('div', 'vg-info'); var vw = mk('div', 'vg-views'); vw.textContent = '👁 ' + fmt(v.views || 0); info.appendChild(vw);
+
+      var info = mk('div', 'vg-info');
+      var vw = mk('div', 'vg-views'); vw.textContent = '👁 ' + fmt(v.views || 0); info.appendChild(vw);
       if (v.access_level && v.access_level !== 'free') { var vb = mk('div', 'vg-badge'); vb.textContent = '🔒'; info.appendChild(vb); }
       cell.appendChild(info);
-      cell.onclick = function () { openVideoFromGrid(v); };
+
+      // ---- LONG PRESS → DELETE (само за собствените видеа) ----
+      if (allowDelete) {
+        var pressTimer = null;
+        var deleteShown = false;
+
+        function showDeleteOverlay() {
+          if (deleteShown) return;
+          deleteShown = true;
+          var ov = mk('div', 'vg-delete-ov');
+          ov.style.cssText = 'position:absolute;inset:0;background:rgba(0,0,0,.75);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:20;border-radius:8px';
+          var icon = mk('div'); icon.textContent = '🗑️'; icon.style.cssText = 'font-size:2rem;margin-bottom:8px';
+          var label = mk('div'); label.textContent = 'Изтрий?'; label.style.cssText = 'font-size:.75rem;color:#fff;margin-bottom:12px';
+          var btnRow = mk('div'); btnRow.style.cssText = 'display:flex;gap:8px';
+
+          var yesBtn = mk('button'); yesBtn.textContent = '✕ Изтрий';
+          yesBtn.style.cssText = 'background:#e05252;color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:.78rem;font-weight:700;cursor:pointer';
+          yesBtn.onclick = function (e) { e.stopPropagation(); deleteVideo(v, cell, grid); };
+
+          var noBtn = mk('button'); noBtn.textContent = 'Назад';
+          noBtn.style.cssText = 'background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:.78rem;cursor:pointer';
+          noBtn.onclick = function (e) { e.stopPropagation(); hideDeleteOverlay(); };
+
+          btnRow.appendChild(yesBtn); btnRow.appendChild(noBtn);
+          ov.appendChild(icon); ov.appendChild(label); ov.appendChild(btnRow);
+          cell.appendChild(ov);
+        }
+
+        function hideDeleteOverlay() {
+          deleteShown = false;
+          var ov = cell.querySelector('.vg-delete-ov');
+          if (ov) { try { cell.removeChild(ov); } catch (e) { } }
+        }
+
+        cell.addEventListener('touchstart', function () {
+          pressTimer = setTimeout(function () { showDeleteOverlay(); }, 600);
+        }, { passive: true });
+        cell.addEventListener('touchend',   function () { clearTimeout(pressTimer); }, { passive: true });
+        cell.addEventListener('touchmove',  function () { clearTimeout(pressTimer); }, { passive: true });
+
+        // На desktop — десен клик
+        cell.addEventListener('contextmenu', function (e) { e.preventDefault(); showDeleteOverlay(); });
+
+        cell.onclick = function (e) {
+          if (deleteShown) return;   // ако е показан overlay — не отваряй видеото
+          openVideoFromGrid(v);
+        };
+      } else {
+        cell.onclick = function () { openVideoFromGrid(v); };
+      }
+
       grid.appendChild(cell);
     });
-  } else { grid.innerHTML = "<div style='grid-column:1/-1;padding:30px;text-align:center;color:var(--text2)'>" + emptyMsg + "</div>"; }
+  } else {
+    grid.innerHTML = "<div style='grid-column:1/-1;padding:30px;text-align:center;color:var(--text2)'>" + emptyMsg + "</div>";
+  }
   return grid;
 }
 
+// ====== РЕНДЕРИРАНЕ НА ПРОФИЛ ======
 async function renderProfile() {
   var wrap = el('profile-body'); if (!wrap) return; wrap.innerHTML = '';
   if (!STATE.user) {
@@ -38,6 +139,7 @@ async function renderProfile() {
     var lb2 = mk('button', 'btn-gold'); lb2.style.cssText = 'width:auto;padding:12px 32px;margin:0 auto;display:block'; lb2.textContent = 'Вход / Регистрация'; lb2.onclick = function () { openModal('m-auth'); };
     lm.appendChild(lb2); wrap.appendChild(lm); if (window.lucide) window.lucide.createIcons(); return;
   }
+
   var banner = mk('div', 'p-banner'); banner.appendChild(mk('div', 'p-banner-gradient')); wrap.appendChild(banner);
   var hero = mk('div', 'p-hero');
   var avW = mk('div', 'p-avatar-wrap');
@@ -59,6 +161,7 @@ async function renderProfile() {
     };
     document.body.appendChild(ai2);
   }
+
   var nm = mk('div', 'p-name'); nm.textContent = STATE.user.name || STATE.user.email.split('@')[0];
   var hd = mk('div', 'p-handle'); hd.textContent = '@' + (STATE.user.name || STATE.user.email.split('@')[0]).toLowerCase().replace(/\s+/g, '_');
   var bio = mk('p', 'p-bio'); bio.textContent = STATE.user.bio || 'Добави биография';
@@ -71,24 +174,51 @@ async function renderProfile() {
   [{ n: vc, l: 'Видеа' }, { n: fc, l: 'Фена' }, { n: foc, l: 'Следва' }].forEach(function (s) {
     var st = mk('div'); var sn = mk('div', 'pst-n'); sn.textContent = s.n; var sl = mk('div', 'pst-l'); sl.textContent = s.l; st.appendChild(sn); st.appendChild(sl); stats.appendChild(st);
   });
+
   var btns = mk('div', 'p-action-btns');
   var eb = mk('button', 'p-edit-btn'); eb.textContent = '✏️ Редактирай'; eb.onclick = function () { var en = el('edit-name'); var ebi = el('edit-bio'); if (en) en.value = STATE.user.name || ''; if (ebi) ebi.value = STATE.user.bio || ''; openModal('m-edit-profile'); };
   var cb = mk('button', 'p-creator-btn'); cb.textContent = '🎬 Creator Панел'; cb.onclick = function () { showPage('creator'); };
   btns.appendChild(eb); btns.appendChild(cb);
   hero.appendChild(avW); hero.appendChild(nm); hero.appendChild(hd); hero.appendChild(stats); hero.appendChild(bio); hero.appendChild(btns); wrap.appendChild(hero);
+
   var tabs = mk('div', 'p-tabs'); var tabBtns = []; var grids = [];
   ['📹 Видеа', '❤️ Харесани', '🔖 Запазени', '💎 Премиум'].forEach(function (t, idx) {
     var tb = mk('button', 'p-tab' + (idx === 0 ? ' active' : '')); tb.textContent = t; tabs.appendChild(tb); tabBtns.push(tb);
   });
   wrap.appendChild(tabs);
-  var myVids = []; if (STATE.sb) { try { var mv = await STATE.sb.from('videos').select('*').eq('user_id', STATE.user.id).order('created_at', { ascending: false }).limit(12); myVids = mv.data || []; } catch (e) { } }
-  var likedVids = []; if (STATE.sb) { try { var lv = await STATE.sb.from('likes').select('video_id').eq('user_id', STATE.user.id); var lids = (lv.data || []).map(function (l) { return l.video_id; }); if (lids.length) { var lvv = await STATE.sb.from('videos').select('*').in('id', lids); likedVids = lvv.data || []; } } catch (e) { } }
-  var savedVids = []; if (STATE.sb) { try { var sv = await STATE.sb.from('saves').select('video_id').eq('user_id', STATE.user.id); var sids = (sv.data || []).map(function (s) { return s.video_id; }); if (sids.length) { var svv = await STATE.sb.from('videos').select('*').in('id', sids); savedVids = svv.data || []; } } catch (e) { } }
+
+  var myVids = [];
+  if (STATE.sb) { try { var mv = await STATE.sb.from('videos').select('*').eq('user_id', STATE.user.id).order('created_at', { ascending: false }).limit(50); myVids = mv.data || []; } catch (e) { } }
+  var likedVids = [];
+  if (STATE.sb) { try { var lv = await STATE.sb.from('likes').select('video_id').eq('user_id', STATE.user.id); var lids = (lv.data || []).map(function (l) { return l.video_id; }); if (lids.length) { var lvv = await STATE.sb.from('videos').select('*').in('id', lids); likedVids = lvv.data || []; } } catch (e) { } }
+  var savedVids = [];
+  if (STATE.sb) { try { var sv = await STATE.sb.from('saves').select('video_id').eq('user_id', STATE.user.id); var sids = (sv.data || []).map(function (s) { return s.video_id; }); if (sids.length) { var svv = await STATE.sb.from('videos').select('*').in('id', sids); savedVids = svv.data || []; } } catch (e) { } }
   var premVids = myVids.filter(function (v) { return v.access_level && v.access_level !== 'free'; });
-  [myVids, likedVids, savedVids, premVids].forEach(function (vids, idx) {
-    var msgs = ['Все още нямаш видеа', 'Не си харесал видеа', 'Нямаш запазени', 'Нямаш премиум съдържание'];
-    var g = buildVideoGrid(vids, msgs[idx]); g.style.display = idx === 0 ? 'grid' : 'none'; wrap.appendChild(g); grids.push(g);
+
+  // allowDelete = true само за собствените видеа (таб 0 и таб 3)
+  [
+    { vids: myVids,    msg: 'Все още нямаш видеа',       del: true  },
+    { vids: likedVids, msg: 'Не си харесал видеа',        del: false },
+    { vids: savedVids, msg: 'Нямаш запазени',             del: false },
+    { vids: premVids,  msg: 'Нямаш премиум съдържание',   del: true  }
+  ].forEach(function (cfg, idx) {
+    var g = buildVideoGrid(cfg.vids, cfg.msg, cfg.del);
+    g.style.display = idx === 0 ? 'grid' : 'none';
+    wrap.appendChild(g); grids.push(g);
   });
-  tabBtns.forEach(function (tb, idx) { tb.onclick = function () { tabBtns.forEach(function (t) { t.classList.remove('active'); }); tb.classList.add('active'); grids.forEach(function (g, gi) { g.style.display = gi === idx ? 'grid' : 'none'; }); }; });
+
+  tabBtns.forEach(function (tb, idx) {
+    tb.onclick = function () {
+      tabBtns.forEach(function (t) { t.classList.remove('active'); }); tb.classList.add('active');
+      grids.forEach(function (g, gi) { g.style.display = gi === idx ? 'grid' : 'none'; });
+    };
+  });
+
+  // Hint за потребителя
+  var hint = mk('div');
+  hint.style.cssText = 'text-align:center;font-size:.72rem;color:var(--text3);padding:8px 0 16px;opacity:.6';
+  hint.textContent = '💡 Задръж върху видео за да го изтриеш';
+  wrap.appendChild(hint);
+
   if (window.lucide) window.lucide.createIcons();
 }
