@@ -2,7 +2,6 @@ function openUpload() {
   if (!STATE.user) { openModal('m-auth'); return; }
   resetUpload();
   openModal('m-upload');
-  fetch(CONFIG.BACKEND + '/').catch(function() {});
 }
 
 function bindUpload() {
@@ -50,7 +49,7 @@ async function startUpload() {
   var ti = el('upl-title');
   if (!ti || !ti.value.trim()) { showToast('Въведи заглавие!'); return; }
 
-  // Вземи токена — първо от кеша, после от Supabase
+  // Вземи токена
   var token = STATE._token || '';
   if (!token) {
     try {
@@ -67,29 +66,33 @@ async function startUpload() {
   var bar = el('upl-bar'); var pct = el('upl-pct');
   if (act) act.style.display = 'none';
   if (prog) prog.style.display = 'block';
-  if (bar) bar.style.width = '20%';
+  if (bar) bar.style.width = '10%';
   if (pct) pct.textContent = 'Качване...';
 
-  try {
-    var amap = { free: 'free', paid: 'fan', subscribers: 'studio' };
-    var de = el('upl-desc');
-    var formData = new FormData();
-    formData.append('video', STATE.uploadFile, STATE.uploadFile.name);
-    formData.append('title', ti.value.trim());
-    formData.append('description', de ? de.value : '');
-    formData.append('access', amap[STATE.uploadAccess] || 'free');
-    formData.append('token', token);
+  var amap = { free: 'free', paid: 'fan', subscribers: 'studio' };
+  var de = el('upl-desc');
+  var formData = new FormData();
+  formData.append('video', STATE.uploadFile, STATE.uploadFile.name);
+  formData.append('title', ti.value.trim());
+  formData.append('description', de ? de.value : '');
+  formData.append('access', amap[STATE.uploadAccess] || 'free');
+  formData.append('token', token);
 
-    if (bar) bar.style.width = '50%';
+  // XMLHttpRequest — по-стабилен на мобилни при file upload
+  var xhr = new XMLHttpRequest();
+  xhr.open('POST', CONFIG.BACKEND + '/upload', true);
 
-    var resp = await fetch(CONFIG.BACKEND + '/upload', {
-      method: 'POST',
-      body: formData
-    });
+  xhr.upload.onprogress = function(e) {
+    if (e.lengthComputable && bar && pct) {
+      var pctVal = Math.round(e.loaded / e.total * 90);
+      bar.style.width = pctVal + '%';
+      pct.textContent = pctVal + '%';
+    }
+  };
 
-    if (bar) bar.style.width = '100%';
-
-    if (resp.ok) {
+  xhr.onload = function() {
+    if (xhr.status === 200) {
+      if (bar) bar.style.width = '100%';
       if (prog) prog.style.display = 'none';
       var suc = el('upl-suc'); if (suc) suc.style.display = 'block';
       showToast('✅ Качено успешно!');
@@ -100,13 +103,23 @@ async function startUpload() {
         resetFeed(); renderFeed();
       }, 2000);
     } else {
-      var errText = 'Грешка ' + resp.status;
-      try { var errJson = await resp.json(); errText = errJson.error || errText; } catch(e) {}
+      var errText = 'Грешка ' + xhr.status;
+      try { var d = JSON.parse(xhr.responseText); errText = d.error || errText; } catch(e) {}
       if (act) act.style.display = 'block'; if (prog) prog.style.display = 'none';
       showToast('❌ ' + errText);
     }
-  } catch(err) {
+  };
+
+  xhr.onerror = function() {
     if (act) act.style.display = 'block'; if (prog) prog.style.display = 'none';
-    showToast('❌ ' + err.message);
-  }
+    showToast('❌ Грешка при качване. Провери интернета.');
+  };
+
+  xhr.ontimeout = function() {
+    if (act) act.style.display = 'block'; if (prog) prog.style.display = 'none';
+    showToast('❌ Времето изтече. Опитай пак.');
+  };
+
+  xhr.timeout = 120000; // 2 минути timeout
+  xhr.send(formData);
 }
