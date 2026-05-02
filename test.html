@@ -1,17 +1,23 @@
-<button onclick="test()">Тест POST</button>
+<!DOCTYPE html>
+<html>
+<body>
+<button onclick="test()">Тест от Krevio контекст</button>
 <div id="r"></div>
+<script src="js/config.js"></script>
 <script>
 async function test() {
   document.getElementById('r').textContent = 'Изпращане...';
   try {
     var fd = new FormData();
     fd.append('test', 'hello');
-    var resp = await fetch('https://krevio-backend-production.up.railway.app/upload', {
+    var resp = await fetch(CONFIG.BACKEND + '/upload', {
       method: 'POST', body: fd
     });
     document.getElementById('r').textContent = 'OK: ' + resp.status;
   } catch(e) {
-    document.getElementById('r').textContent = 'ГРЕШКА: ' + e.message;
+    document.getElementById('r').textContent = 'ГРЕШКА: ' + e.message + ' | BACKEND: ' + (typeof CONFIG !== "undefined" ? CONFIG.BACKEND : 'CONFIG не е зареден');
   }
 }
 </script>
+</body>
+</html>
