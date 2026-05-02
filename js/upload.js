@@ -1,17 +1,31 @@
-function openUpload() { if (!STATE.user) { openModal('m-auth'); return; } resetUpload(); openModal('m-upload'); }
+function openUpload() {
+  if (!STATE.user) { openModal('m-auth'); return; }
+  resetUpload();
+  openModal('m-upload');
+  // Събуди Railway backend веднага щом отворим modal-а
+  wakeBackend();
+}
+
+// Събужда Railway (безшумно) — изпраща GET преди upload
+async function wakeBackend() {
+  try { await fetch(CONFIG.BACKEND + '/', { method: 'GET' }); } catch(e) {}
+}
 
 function bindUpload() {
   var dz = el('upl-dz'), inp = el('upl-inp');
   if (dz && inp) {
-    dz.onclick = function () { inp.click(); };
-    inp.onchange = function () { if (this.files && this.files[0]) setFile(this.files[0]); };
-    dz.ondragover = function (e) { e.preventDefault(); dz.classList.add('over'); };
-    dz.ondragleave = function () { dz.classList.remove('over'); };
-    dz.ondrop = function (e) { e.preventDefault(); dz.classList.remove('over'); if (e.dataTransfer && e.dataTransfer.files[0]) setFile(e.dataTransfer.files[0]); };
+    dz.onclick = function() { inp.click(); };
+    inp.onchange = function() { if (this.files && this.files[0]) setFile(this.files[0]); };
+    dz.ondragover  = function(e) { e.preventDefault(); dz.classList.add('over'); };
+    dz.ondragleave = function() { dz.classList.remove('over'); };
+    dz.ondrop = function(e) {
+      e.preventDefault(); dz.classList.remove('over');
+      if (e.dataTransfer && e.dataTransfer.files[0]) setFile(e.dataTransfer.files[0]);
+    };
   }
   var rm = el('upl-fi-rm'); if (rm) rm.onclick = resetUpload;
   var go = el('upl-go-btn'); if (go) go.onclick = startUpload;
-  var cancel = el('upl-cancel-btn'); if (cancel) cancel.onclick = function () { closeModal('m-upload'); resetUpload(); };
+  var cancel = el('upl-cancel-btn'); if (cancel) cancel.onclick = function() { closeModal('m-upload'); resetUpload(); };
 }
 
 function setFile(f) {
@@ -31,20 +45,55 @@ function resetUpload() {
   var suc = el('upl-suc'); if (suc) suc.style.display = 'none';
   var act = el('upl-act'); if (act) act.style.display = 'block';
   var bar = el('upl-bar'); if (bar) bar.style.width = '0';
+  var pct = el('upl-pct'); if (pct) pct.textContent = '0%';
   var ti = el('upl-title'); if (ti) ti.value = '';
   var de = el('upl-desc'); if (de) de.value = '';
-  document.querySelectorAll('.mono-opt').forEach(function (o, i) { o.classList.toggle('selected', i === 0); });
+  document.querySelectorAll('.mono-opt').forEach(function(o, i) { o.classList.toggle('selected', i === 0); });
 }
 
 async function startUpload() {
   if (!STATE.uploadFile) { showToast('Избери видео!'); return; }
-  var ti = el('upl-title'); if (!ti || !ti.value.trim()) { showToast('Въведи заглавие!'); return; }
-  var token = ''; try { var s = await STATE.sb.auth.getSession(); if (s.data && s.data.session) token = s.data.session.access_token; } catch (e) { }
+  var ti = el('upl-title');
+  if (!ti || !ti.value.trim()) { showToast('Въведи заглавие!'); return; }
+
+  var token = '';
+  try {
+    var s = await STATE.sb.auth.getSession();
+    if (s.data && s.data.session) token = s.data.session.access_token;
+  } catch(e) {}
   if (!token) { showToast('Влез в акаунта!'); return; }
+
   var act = el('upl-act'); var prog = el('upl-prog');
-  if (act) act.style.display = 'none'; if (prog) prog.style.display = 'block';
-  var b = el('upl-bar'); var pc = el('upl-pct');
-  if (b) b.style.width = '10%'; if (pc) pc.textContent = 'Изпращане...';
+  var bar = el('upl-bar'); var pct = el('upl-pct');
+  if (act) act.style.display = 'none';
+  if (prog) prog.style.display = 'block';
+  if (bar) bar.style.width = '5%';
+  if (pct) pct.textContent = 'Свързване...';
+
+  // 1. Събуди backend (чакаме отговор)
+  try {
+    if (pct) pct.textContent = 'Свързване с сървър...';
+    if (bar) bar.style.width = '10%';
+    var ping = await fetch(CONFIG.BACKEND + '/', { method: 'GET' });
+    if (!ping.ok && ping.status !== 200) throw new Error('Server unavailable');
+  } catch(e) {
+    // Опитаме пак след 3 секунди
+    if (pct) pct.textContent = 'Стартиране на сървъра...';
+    await new Promise(function(res) { setTimeout(res, 3000); });
+    try {
+      await fetch(CONFIG.BACKEND + '/', { method: 'GET' });
+    } catch(e2) {
+      if (act) act.style.display = 'block';
+      if (prog) prog.style.display = 'none';
+      showToast('❌ Сървърът не отговаря. Опитай след малко.');
+      return;
+    }
+  }
+
+  if (bar) bar.style.width = '20%';
+  if (pct) pct.textContent = 'Качване...';
+
+  // 2. Качи видеото
   try {
     var amap = { free: 'free', paid: 'fan', subscribers: 'studio' };
     var de = el('upl-desc');
@@ -54,20 +103,43 @@ async function startUpload() {
     formData.append('description', de ? de.value : '');
     formData.append('access', amap[STATE.uploadAccess] || 'free');
     formData.append('token', token);
-    if (b) b.style.width = '30%'; if (pc) pc.textContent = 'Качване...';
-    var resp = await fetch(CONFIG.BACKEND + '/upload', { method: 'POST', body: formData });
-    if (b) b.style.width = '90%';
+
+    if (bar) bar.style.width = '40%';
+
+    var resp = await fetch(CONFIG.BACKEND + '/upload', {
+      method: 'POST',
+      body: formData
+    });
+
+    if (bar) bar.style.width = '95%';
+
     if (resp.ok) {
+      if (bar) bar.style.width = '100%';
       if (prog) prog.style.display = 'none';
       var suc = el('upl-suc'); if (suc) suc.style.display = 'block';
       showToast('✅ Качено успешно!');
-      setTimeout(function () { closeModal('m-upload'); resetUpload(); renderFeed(); }, 2000);
+      setTimeout(function() {
+        closeModal('m-upload');
+        resetUpload();
+        // Рефрешни feed-а
+        var wrap = el('feed-wrap');
+        if (wrap) { wrap.innerHTML = ''; delete wrap.dataset.single; }
+        resetFeed(); renderFeed();
+      }, 2000);
     } else {
-      if (act) act.style.display = 'block'; if (prog) prog.style.display = 'none';
-      showToast('❌ Грешка: ' + resp.status);
+      var errText = 'Грешка ' + resp.status;
+      try { var errJson = await resp.json(); errText = errJson.error || errText; } catch(e) {}
+      if (act) act.style.display = 'block';
+      if (prog) prog.style.display = 'none';
+      showToast('❌ ' + errText);
     }
-  } catch (err) {
-    if (act) act.style.display = 'block'; if (prog) prog.style.display = 'none';
-    showToast('❌ ' + err.message);
+  } catch(err) {
+    if (act) act.style.display = 'block';
+    if (prog) prog.style.display = 'none';
+    if (err.message === 'Failed to fetch') {
+      showToast('❌ Изгубена връзка. Опитай пак.');
+    } else {
+      showToast('❌ ' + err.message);
+    }
   }
 }
