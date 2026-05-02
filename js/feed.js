@@ -6,7 +6,7 @@ function resetFeed() {
 }
 
 function cleanupVideos(curIdx) {
-  document.querySelectorAll('.video-item').forEach(function (item, idx) {
+  document.querySelectorAll('.video-item').forEach(function(item, idx) {
     var vid = item.querySelector('.v-player'); if (!vid) return;
     if (idx < curIdx - 2 || idx > curIdx + 6) {
       if (vid.src) { vid.pause(); vid._src = vid._src || vid.src; vid.src = ''; vid.load(); }
@@ -18,14 +18,21 @@ function cleanupVideos(curIdx) {
 
 async function renderFeed() {
   var wrap = el('feed-wrap'); if (!wrap) return;
-  document.querySelectorAll('.video-item').forEach(function (it) {
+  document.querySelectorAll('.video-item').forEach(function(it) {
     if (it._obs) { it._obs.disconnect(); it._obs = null; }
     var vid = it.querySelector('.v-player');
     if (vid) { vid.pause(); vid.src = ''; vid.load(); }
   });
-  resetFeed(); wrap.innerHTML = ''; await loadMoreVideos();
-  var sentinel = mk('div', 'load-more'); sentinel.id = 'sentinel'; sentinel.appendChild(mk('div', 'load-spinner')); wrap.appendChild(sentinel);
-  var sObs = new IntersectionObserver(function (entries) {
+  resetFeed();
+  wrap.innerHTML = '';
+
+  await loadMoreVideos();
+
+  // Sentinel за infinite scroll
+  var sentinel = mk('div', 'load-more'); sentinel.id = 'sentinel';
+  sentinel.appendChild(mk('div', 'load-spinner'));
+  wrap.appendChild(sentinel);
+  var sObs = new IntersectionObserver(function(entries) {
     if (entries[0].isIntersecting && !STATE.feed.loading && STATE.feed.hasMore) loadMoreVideos();
   }, { threshold: 0.1 });
   sObs.observe(sentinel);
@@ -42,7 +49,7 @@ async function loadMoreVideos() {
   if (STATE.sb) {
     try {
       if (STATE.currentTab === 'following') {
-        var fids = Object.keys(STATE.following).filter(function (k) { return STATE.following[k]; });
+        var fids = Object.keys(STATE.following).filter(function(k) { return STATE.following[k]; });
         if (fids.length === 0) {
           if (STATE.feed.offset === 0) {
             var e = mk('div', 'empty-state');
@@ -51,23 +58,45 @@ async function loadMoreVideos() {
           }
           STATE.feed.loading = false; STATE.feed.hasMore = false; return;
         }
-        var r1 = await STATE.sb.from('videos').select('*').in('user_id', fids).not('file_url', 'is', null).limit(STATE.feed.batchSize + 10);
-        videos = (r1.data || []).filter(function (v) { return v.file_url && !STATE.shownVideoIds.includes(v.id); }).sort(function () { return Math.random() - .5; }).slice(0, STATE.feed.batchSize);
+        var r1 = await STATE.sb.from('videos').select('*').in('user_id', fids).limit(STATE.feed.batchSize + 10);
+        videos = (r1.data || []).filter(function(v) { return v.file_url && !STATE.shownVideoIds.includes(v.id); })
+          .sort(function() { return Math.random() - .5; }).slice(0, STATE.feed.batchSize);
+
       } else if (STATE.currentTab === 'premium') {
-        var r2 = await STATE.sb.from('videos').select('*').neq('access_level', 'free').not('file_url', 'is', null).limit(STATE.feed.batchSize + 10);
-        videos = (r2.data || []).filter(function (v) { return v.file_url && !STATE.shownVideoIds.includes(v.id); }).sort(function () { return Math.random() - .5; }).slice(0, STATE.feed.batchSize);
+        var r2 = await STATE.sb.from('videos').select('*').neq('access_level', 'free').limit(STATE.feed.batchSize + 10);
+        videos = (r2.data || []).filter(function(v) { return v.file_url && !STATE.shownVideoIds.includes(v.id); })
+          .sort(function() { return Math.random() - .5; }).slice(0, STATE.feed.batchSize);
+
       } else {
         var q = STATE.user
-          ? await STATE.sb.from('videos').select('*').neq('user_id', STATE.user.id).not('file_url', 'is', null).limit(STATE.feed.batchSize + 10)
-          : await STATE.sb.from('videos').select('*').not('file_url', 'is', null).limit(STATE.feed.batchSize + 10);
-        videos = (q.data || []).filter(function (v) { return v.file_url && !STATE.shownVideoIds.includes(v.id); }).sort(function () { return Math.random() - .5; }).slice(0, STATE.feed.batchSize);
+          ? await STATE.sb.from('videos').select('*').neq('user_id', STATE.user.id).limit(STATE.feed.batchSize + 10)
+          : await STATE.sb.from('videos').select('*').limit(STATE.feed.batchSize + 10);
+        videos = (q.data || []).filter(function(v) { return v.file_url && !STATE.shownVideoIds.includes(v.id); })
+          .sort(function() { return Math.random() - .5; }).slice(0, STATE.feed.batchSize);
       }
+
       if (videos.length < STATE.feed.batchSize) STATE.feed.hasMore = false;
-      videos.forEach(function (v) { STATE.shownVideoIds.push(v.id); });
-    } catch (e) {
+      videos.forEach(function(v) { STATE.shownVideoIds.push(v.id); });
+
+    } catch(e) {
       console.error('loadMoreVideos:', e);
+      // Покажи грешка вместо черен екран
+      if (STATE.feed.offset === 0) {
+        var errDiv = mk('div', 'empty-state');
+        errDiv.innerHTML = '<div class="empty-ico">⚠️</div><div class="empty-title">Грешка при зареждане</div><div class="empty-sub" style="margin-top:8px;font-size:.8rem;color:var(--text2)">Опитай отново</div>';
+        errDiv.onclick = function() { resetFeed(); wrap.innerHTML = ''; renderFeed(); };
+        if (sentinel) wrap.insertBefore(errDiv, sentinel); else wrap.appendChild(errDiv);
+      }
       STATE.feed.loading = false; return;
     }
+  } else {
+    // Няма Supabase — покажи съобщение
+    if (STATE.feed.offset === 0) {
+      var noSb = mk('div', 'empty-state');
+      noSb.innerHTML = '<div class="empty-ico">🎬</div><div class="empty-title">Зарежда...</div>';
+      if (sentinel) wrap.insertBefore(noSb, sentinel); else wrap.appendChild(noSb);
+    }
+    STATE.feed.loading = false; return;
   }
 
   if (STATE.feed.offset === 0 && videos.length === 0) {
@@ -77,21 +106,22 @@ async function loadMoreVideos() {
     STATE.feed.loading = false; return;
   }
 
+  // Зареди профили
   var uids = [];
-  videos.forEach(function (v) { if (uids.indexOf(v.user_id) === -1) uids.push(v.user_id); });
-  await Promise.all(uids.map(function (uid) { return getProfile(uid); }));
+  videos.forEach(function(v) { if (uids.indexOf(v.user_id) === -1) uids.push(v.user_id); });
+  await Promise.all(uids.map(function(uid) { return getProfile(uid); }));
 
   var ads = [
     { company: 'Техномаркет', text: 'Лаптопи от 599 лв!' },
     { company: 'Kaufland BG', text: 'Промоции тази седмица!' },
-    { company: 'Виваком', text: '1Gbps — 25 лв/мес' },
-    { company: 'Банка ДСК', text: 'Кредит до 50,000 лв онлайн' }
+    { company: 'Виваком',     text: '1Gbps — 25 лв/мес' },
+    { company: 'Банка ДСК',   text: 'Кредит до 50,000 лв онлайн' }
   ];
 
-  videos.forEach(function (v, i) {
+  videos.forEach(function(v, i) {
     var idx = STATE.feed.offset + i;
     var card = buildCard(v, idx);
-    if (!card) return;   // ← пропусни ако buildCard върна null (няма file_url)
+    if (!card) return;
     if (sentinel) wrap.insertBefore(card, sentinel); else wrap.appendChild(card);
     if (STATE.currentTab === 'trending' && (idx + 1) % 4 === 0) {
       var ad = buildAd(Math.floor(idx / 4) % ads.length, ads);
