@@ -1,3 +1,8 @@
+// ============================================
+// KREVIO — supabase.js
+// Само data функции. Auth е в auth.js
+// ============================================
+
 async function initUser(u) {
   STATE.user = {
     id: u.id,
@@ -9,8 +14,7 @@ async function initUser(u) {
   await loadFollowing();
   subscribeNotifs();
   updateNotifBadge();
-  // НЕ викаме renderProfile() тук — ще се рендерира когато потребителят
-  // отиде на профил страницата. Двойното викане причиняваше race condition.
+  // НЕ викаме renderProfile() — рендерира се при навигация към профил
 }
 
 async function loadMyProfile() {
@@ -43,7 +47,6 @@ async function getProfile(uid) {
   try {
     var r = await STATE.sb.from('profiles').select('*').eq('id', uid).single();
     if (r.data) {
-      // LRU cache limit
       if (STATE.profileCacheKeys.length >= CONFIG.CACHE_LIMIT) {
         var oldest = STATE.profileCacheKeys.shift();
         delete STATE.profileCache[oldest];
@@ -81,69 +84,6 @@ async function saveProfile() {
     STATE.user.name = name; STATE.user.bio = bio;
     closeModal('m-edit-profile');
     showToast('✅ Профилът е запазен!');
-    _profileRendering = false;
-    renderProfile();
+    if (typeof renderProfile === 'function') renderProfile();
   } catch(e) { showToast('Грешка: ' + e.message); }
-}
-
-async function doLogin() {
-  var email = el('l-email') ? el('l-email').value.trim() : '';
-  var pass  = el('l-pass')  ? el('l-pass').value : '';
-  var errEl = el('l-err');
-  if (!email || !pass) { if (errEl) errEl.textContent = 'Попълни всички полета.'; return; }
-  var btn = el('l-btn'); if (btn) { btn.textContent = '⏳...'; btn.disabled = true; }
-  try {
-    var r = await STATE.sb.auth.signInWithPassword({ email: email, password: pass });
-    if (r.error) throw r.error;
-    closeModal('m-auth');
-    showToast('Добре дошъл! 🎉');
-  } catch(e) {
-    if (errEl) errEl.textContent = e.message || 'Грешен имейл или парола.';
-  } finally {
-    if (btn) { btn.textContent = 'Вход →'; btn.disabled = false; }
-  }
-}
-
-async function doRegister() {
-  var name  = el('r-name')  ? el('r-name').value.trim()  : '';
-  var email = el('r-email') ? el('r-email').value.trim() : '';
-  var pass  = el('r-pass')  ? el('r-pass').value : '';
-  var errEl = el('r-err');
-  if (!name || !email || !pass) { if (errEl) errEl.textContent = 'Попълни всички полета.'; return; }
-  if (pass.length < 8) { if (errEl) errEl.textContent = 'Паролата трябва да е поне 8 символа.'; return; }
-  var btn = el('r-btn'); if (btn) { btn.textContent = '⏳...'; btn.disabled = true; }
-  try {
-    var r = await STATE.sb.auth.signUp({ email: email, password: pass, options: { data: { name: name } } });
-    if (r.error) throw r.error;
-    closeModal('m-auth');
-    showToast('✅ Провери имейла си!');
-  } catch(e) {
-    if (errEl) errEl.textContent = e.message || 'Грешка при регистрация.';
-  } finally {
-    if (btn) { btn.textContent = 'Създай акаунт →'; btn.disabled = false; }
-  }
-}
-
-async function doLogout() {
-  if (STATE.sb) await STATE.sb.auth.signOut();
-  STATE.user = null; STATE.following = {}; STATE.profileCache = {}; STATE.profileCacheKeys = [];
-  if (STATE.msgSubscription)   { STATE.msgSubscription.unsubscribe();   STATE.msgSubscription = null; }
-  if (STATE.notifSubscription) { STATE.notifSubscription.unsubscribe(); STATE.notifSubscription = null; }
-  closeModal('m-menu');
-  showToast('Излязохте успешно. До скоро! 👋');
-  updateNotifBadge();
-  _profileRendering = false;
-  renderProfile();
-}
-
-function switchAuth(type) {
-  var login = el('auth-login'); var reg = el('auth-register');
-  var swl   = el('sw-login');   var swr = el('sw-register');
-  if (type === 'login') {
-    if (login) login.style.display = ''; if (reg) reg.style.display = 'none';
-    if (swl) swl.classList.add('active'); if (swr) swr.classList.remove('active');
-  } else {
-    if (login) login.style.display = 'none'; if (reg) reg.style.display = '';
-    if (swl) swl.classList.remove('active'); if (swr) swr.classList.add('active');
-  }
 }
