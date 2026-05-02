@@ -2,39 +2,29 @@
 <html>
 <body>
 <input type="file" id="f" accept="video/*"><br><br>
-<button onclick="test()">Качи тест</button>
+<button onclick="test()">Качи с XHR</button>
 <div id="r"></div>
 <script src="js/config.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 var sb = supabase.createClient(CONFIG.SB_URL, CONFIG.SB_ANON);
-
 async function test() {
   var file = document.getElementById('f').files[0];
   if (!file) { document.getElementById('r').textContent = 'Избери файл!'; return; }
-  document.getElementById('r').textContent = 'Вземам токен...';
-  
-  var token = '';
-  try {
-    var s = await sb.auth.getSession();
-    if (s.data && s.data.session) token = s.data.session.access_token;
-  } catch(e) {}
-  
-  document.getElementById('r').textContent = 'Токен: ' + (token ? token.substring(0,20)+'...' : 'НЯМА');
+  var s = await sb.auth.getSession();
+  var token = s.data && s.data.session ? s.data.session.access_token : '';
+  document.getElementById('r').textContent = 'Токен: ' + (token ? 'ОК' : 'НЯМА');
   if (!token) return;
-  
-  document.getElementById('r').textContent = 'Качване...';
-  try {
-    var fd = new FormData();
-    fd.append('video', file, file.name);
-    fd.append('title', 'Тест');
-    fd.append('token', token);
-    var resp = await fetch(CONFIG.BACKEND + '/upload', { method: 'POST', body: fd });
-    var data = await resp.json();
-    document.getElementById('r').textContent = 'Статус: ' + resp.status + ' | ' + JSON.stringify(data);
-  } catch(e) {
-    document.getElementById('r').textContent = 'ГРЕШКА: ' + e.message;
-  }
+  var fd = new FormData();
+  fd.append('video', file, file.name);
+  fd.append('title', 'Тест XHR');
+  fd.append('token', token);
+  var xhr = new XMLHttpRequest();
+  xhr.open('POST', CONFIG.BACKEND + '/upload', true);
+  xhr.onload = function() { document.getElementById('r').textContent = 'Статус: ' + xhr.status + ' | ' + xhr.responseText.substring(0,100); };
+  xhr.onerror = function() { document.getElementById('r').textContent = 'XHR ГРЕШКА'; };
+  xhr.send(fd);
+  document.getElementById('r').textContent = 'Изпращане...';
 }
 </script>
 </body>
