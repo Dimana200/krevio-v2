@@ -50,11 +50,17 @@ async function startUpload() {
   var ti = el('upl-title');
   if (!ti || !ti.value.trim()) { showToast('Въведи заглавие!'); return; }
 
-  var token = '';
-  try {
-    var s = await STATE.sb.auth.getSession();
-    if (s.data && s.data.session) token = s.data.session.access_token;
-  } catch(e) {}
+  // Вземи токена — първо от кеша, после от Supabase
+  var token = STATE._token || '';
+  if (!token) {
+    try {
+      var s = await STATE.sb.auth.getSession();
+      if (s.data && s.data.session) {
+        token = s.data.session.access_token;
+        STATE._token = token;
+      }
+    } catch(e) {}
+  }
   if (!token) { showToast('Влез в акаунта!'); return; }
 
   var act = el('upl-act'); var prog = el('upl-prog');
