@@ -2,11 +2,9 @@ function openUpload() {
   if (!STATE.user) { openModal('m-auth'); return; }
   resetUpload();
   openModal('m-upload');
-  // Събуди Railway backend веднага щом отворим modal-а
   wakeBackend();
 }
 
-// Събужда Railway (безшумно) — изпраща GET преди upload
 async function wakeBackend() {
   try { await fetch(CONFIG.BACKEND + '/', { method: 'GET' }); } catch(e) {}
 }
@@ -37,7 +35,7 @@ function setFile(f) {
 }
 
 function resetUpload() {
-  STATE.uploadFile = null; STATE.uploadAccess = 'free';
+  STATE.uploadFile = null; STATE.uploadAccess = 'free'; STATE._thumbBlob = null;
   var inp = el('upl-inp'); if (inp) inp.value = '';
   var dz = el('upl-dz'); if (dz) dz.style.display = 'block';
   var fi = el('upl-fi'); if (fi) fi.style.display = 'none';
@@ -49,6 +47,43 @@ function resetUpload() {
   var ti = el('upl-title'); if (ti) ti.value = '';
   var de = el('upl-desc'); if (de) de.value = '';
   document.querySelectorAll('.mono-opt').forEach(function(o, i) { o.classList.toggle('selected', i === 0); });
+}
+
+// ====== ГЕНЕРИРАНЕ НА THUMBNAIL ОТ ВИДЕО ФАЙЛ ======
+function generateThumbnail(file) {
+  return new Promise(function(resolve) {
+    try {
+      var video = document.createElement('video');
+      video.muted = true; video.playsInline = true;
+      video.preload = 'metadata';
+      var url = URL.createObjectURL(file);
+      video.src = url;
+
+      var done = false;
+      function capture() {
+        if (done) return; done = true;
+        try {
+          var canvas = document.createElement('canvas');
+          canvas.width = 360; canvas.height = 640;
+          var ctx = canvas.getContext('2d');
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          canvas.toBlob(function(blob) {
+            URL.revokeObjectURL(url);
+            resolve(blob);
+          }, 'image/jpeg', 0.75);
+        } catch(e) { URL.revokeObjectURL(url); resolve(null); }
+      }
+
+      video.addEventListener('seeked', capture);
+      video.addEventListener('loadedmetadata', function() {
+        video.currentTime = Math.min(1, video.duration * 0.1);
+      });
+      video.addEventListener('error', function() { URL.revokeObjectURL(url); resolve(null); });
+
+      // Timeout ако браузърът не зарежда metadata
+      setTimeout(function() { if (!done) { done = true; URL.revokeObjectURL(url); resolve(null); } }, 5000);
+    } catch(e) { resolve(null); }
+  });
 }
 
 async function startUpload() {
@@ -68,32 +103,30 @@ async function startUpload() {
   if (act) act.style.display = 'none';
   if (prog) prog.style.display = 'block';
   if (bar) bar.style.width = '5%';
-  if (pct) pct.textContent = 'Свързване...';
+  if (pct) pct.textContent = 'Подготвяне...';
 
-  // 1. Събуди backend (чакаме отговор)
+  // 1. Генерирай thumbnail
+  if (pct) pct.textContent = 'Създаване на thumbnail...';
+  var thumbBlob = await generateThumbnail(STATE.uploadFile);
+  if (bar) bar.style.width = '15%';
+
+  // 2. Събуди backend
   try {
     if (pct) pct.textContent = 'Свързване с сървър...';
-    if (bar) bar.style.width = '10%';
-    var ping = await fetch(CONFIG.BACKEND + '/', { method: 'GET' });
-    if (!ping.ok && ping.status !== 200) throw new Error('Server unavailable');
+    await fetch(CONFIG.BACKEND + '/', { method: 'GET' });
   } catch(e) {
-    // Опитаме пак след 3 секунди
     if (pct) pct.textContent = 'Стартиране на сървъра...';
     await new Promise(function(res) { setTimeout(res, 3000); });
-    try {
-      await fetch(CONFIG.BACKEND + '/', { method: 'GET' });
-    } catch(e2) {
-      if (act) act.style.display = 'block';
-      if (prog) prog.style.display = 'none';
-      showToast('❌ Сървърът не отговаря. Опитай след малко.');
-      return;
+    try { await fetch(CONFIG.BACKEND + '/', { method: 'GET' }); }
+    catch(e2) {
+      if (act) act.style.display = 'block'; if (prog) prog.style.display = 'none';
+      showToast('❌ Сървърът не отговаря. Опитай след малко.'); return;
     }
   }
-
-  if (bar) bar.style.width = '20%';
+  if (bar) bar.style.width = '25%';
   if (pct) pct.textContent = 'Качване...';
 
-  // 2. Качи видеото
+  // 3. Качи видеото
   try {
     var amap = { free: 'free', paid: 'fan', subscribers: 'studio' };
     var de = el('upl-desc');
@@ -103,14 +136,11 @@ async function startUpload() {
     formData.append('description', de ? de.value : '');
     formData.append('access', amap[STATE.uploadAccess] || 'free');
     formData.append('token', token);
+    if (thumbBlob) formData.append('thumbnail', thumbBlob, 'thumb.jpg');
 
     if (bar) bar.style.width = '40%';
 
-    var resp = await fetch(CONFIG.BACKEND + '/upload', {
-      method: 'POST',
-      body: formData
-    });
-
+    var resp = await fetch(CONFIG.BACKEND + '/upload', { method: 'POST', body: formData });
     if (bar) bar.style.width = '95%';
 
     if (resp.ok) {
@@ -119,9 +149,7 @@ async function startUpload() {
       var suc = el('upl-suc'); if (suc) suc.style.display = 'block';
       showToast('✅ Качено успешно!');
       setTimeout(function() {
-        closeModal('m-upload');
-        resetUpload();
-        // Рефрешни feed-а
+        closeModal('m-upload'); resetUpload();
         var wrap = el('feed-wrap');
         if (wrap) { wrap.innerHTML = ''; delete wrap.dataset.single; }
         resetFeed(); renderFeed();
@@ -129,17 +157,11 @@ async function startUpload() {
     } else {
       var errText = 'Грешка ' + resp.status;
       try { var errJson = await resp.json(); errText = errJson.error || errText; } catch(e) {}
-      if (act) act.style.display = 'block';
-      if (prog) prog.style.display = 'none';
+      if (act) act.style.display = 'block'; if (prog) prog.style.display = 'none';
       showToast('❌ ' + errText);
     }
   } catch(err) {
-    if (act) act.style.display = 'block';
-    if (prog) prog.style.display = 'none';
-    if (err.message === 'Failed to fetch') {
-      showToast('❌ Изгубена връзка. Опитай пак.');
-    } else {
-      showToast('❌ ' + err.message);
-    }
+    if (act) act.style.display = 'block'; if (prog) prog.style.display = 'none';
+    showToast('❌ ' + (err.message === 'Failed to fetch' ? 'Изгубена връзка. Опитай пак.' : err.message));
   }
 }
