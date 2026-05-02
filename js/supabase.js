@@ -1,8 +1,5 @@
 // ============================================
 // KREVIO — supabase.js
-// САМО initUser + loadMyProfile
-// getProfile, toggleFollow, loadFollowing, openCreatorProfile, loadCreatorPanel → creator.js
-// doLogin, doRegister, doLogout, saveProfile, switchAuth, toggleTheme → auth.js
 // ============================================
 
 async function initUser(u) {
@@ -13,6 +10,13 @@ async function initUser(u) {
     avatar: '',
     bio: ''
   };
+  // Запази токена глобално — за upload на мобилни браузъри
+  try {
+    var s = await STATE.sb.auth.getSession();
+    if (s.data && s.data.session) {
+      STATE._token = s.data.session.access_token;
+    }
+  } catch(e) {}
   await loadMyProfile();
   await loadFollowing();
   subscribeNotifs();
