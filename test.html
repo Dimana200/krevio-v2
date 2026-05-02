@@ -1,24 +1,17 @@
-<!DOCTYPE html>
-<html>
-<body>
-<button onclick="test()">Тест Upload</button>
+<button onclick="test()">Тест POST</button>
 <div id="r"></div>
 <script>
 async function test() {
   document.getElementById('r').textContent = 'Изпращане...';
   try {
     var fd = new FormData();
-    fd.append('token', 'test');
-    fd.append('title', 'test');
+    fd.append('test', 'hello');
     var resp = await fetch('https://krevio-backend-production.up.railway.app/upload', {
       method: 'POST', body: fd
     });
-    var data = await resp.json();
-    document.getElementById('r').textContent = 'Статус: ' + resp.status + ' | ' + JSON.stringify(data);
+    document.getElementById('r').textContent = 'OK: ' + resp.status;
   } catch(e) {
     document.getElementById('r').textContent = 'ГРЕШКА: ' + e.message;
   }
 }
 </script>
-</body>
-</html>
