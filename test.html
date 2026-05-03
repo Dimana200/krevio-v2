@@ -1,9 +1,11 @@
 <!DOCTYPE html>
 <html>
 <body>
+<div id="status" style="padding:10px;background:#222;color:gold">Зарежда...</div>
+<br>
 <input type="file" id="upl-inp" accept="video/*" style="display:none">
-<div id="upl-dz" style="padding:20px;border:1px solid gold;cursor:pointer">Натисни за файл</div>
-<div id="upl-fi" style="display:none;padding:10px;background:#111">
+<div id="upl-dz" style="padding:20px;border:1px solid gold;cursor:pointer;display:none">Натисни за файл</div>
+<div id="upl-fi" style="display:none;padding:10px;background:#111;color:#fff">
   <span id="upl-fi-name"></span> 
   <span id="upl-fi-size"></span>
   <button id="upl-fi-rm">X</button>
@@ -18,27 +20,39 @@
   <div id="upl-pct">0%</div>
   <div style="background:#333;height:8px"><div id="upl-bar" style="background:gold;height:100%;width:0"></div></div>
 </div>
-<div id="upl-suc" style="display:none;color:gold">✅ Качено!</div>
-<div id="toast"></div>
+<div id="upl-suc" style="display:none;color:gold;font-size:1.2rem">✅ Качено!</div>
+<div id="toast" style="position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#333;color:#fff;padding:10px 20px;border-radius:8px;display:none"></div>
 <script src="js/config.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
-STATE.sb = supabase.createClient(CONFIG.SB_URL, CONFIG.SB_ANON);
-STATE.uploadAccess = 'free';
 function openModal(){}
 function closeModal(){}
 function renderFeed(){}
 function resetFeed(){}
+function showToast(msg) {
+  var t = document.getElementById('toast');
+  t.textContent = msg; t.style.display = 'block';
+  setTimeout(function() { t.style.display = 'none'; }, 4000);
+}
+
+STATE.uploadAccess = 'free';
+STATE.sb = supabase.createClient(CONFIG.SB_URL, CONFIG.SB_ANON);
+
+// Изчакай сесията преди всичко
+STATE.sb.auth.getSession().then(function(s) {
+  if (s.data && s.data.session) {
+    STATE.user = { id: s.data.session.user.id, email: s.data.session.user.email };
+    STATE._token = s.data.session.access_token;
+    document.getElementById('status').textContent = '✅ Влязъл си като: ' + STATE.user.email;
+    document.getElementById('upl-dz').style.display = 'block';
+  } else {
+    document.getElementById('status').textContent = '❌ НЕ СИ ВЛЯЗЪЛ — влез в Krevio първо';
+  }
+});
 </script>
 <script src="js/upload.js"></script>
 <script>
 bindUpload();
-STATE.sb.auth.getSession().then(function(s) {
-  if (s.data && s.data.session) {
-    STATE.user = { id: s.data.session.user.id };
-    STATE._token = s.data.session.access_token;
-    alert('Влязъл си! Токен: ' + STATE._token.substring(0,30));
-  } else {
-    alert('НЕ СИ ВЛЯЗЪЛ!');
-  }
-});
+</script>
+</body>
+</html>
