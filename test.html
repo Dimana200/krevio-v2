@@ -1,31 +1,47 @@
 <!DOCTYPE html>
 <html>
 <body>
-<input type="file" id="f" accept="video/*"><br><br>
-<button onclick="test()">Качи с XHR</button>
-<div id="r"></div>
+<input type="file" id="upl-inp" accept="video/*" style="display:none">
+<div id="upl-dz" style="padding:20px;border:1px solid gold;cursor:pointer">Натисни за файл</div>
+<div id="upl-fi" style="display:none;padding:10px;background:#111">
+  <span id="upl-fi-name"></span> 
+  <span id="upl-fi-size"></span>
+  <button id="upl-fi-rm">X</button>
+</div>
+<input type="text" id="upl-title" value="Тест" style="display:block;margin:10px 0;padding:8px">
+<textarea id="upl-desc" style="display:block;margin:10px 0;padding:8px"></textarea>
+<div id="upl-act">
+  <button id="upl-go-btn" style="padding:12px 24px;background:gold;border:none;font-weight:bold">Публикувай</button>
+  <button id="upl-cancel-btn">Откажи</button>
+</div>
+<div id="upl-prog" style="display:none">
+  <div id="upl-pct">0%</div>
+  <div style="background:#333;height:8px"><div id="upl-bar" style="background:gold;height:100%;width:0"></div></div>
+</div>
+<div id="upl-suc" style="display:none;color:gold">✅ Качено!</div>
+<div id="toast"></div>
 <script src="js/config.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
-var sb = supabase.createClient(CONFIG.SB_URL, CONFIG.SB_ANON);
-async function test() {
-  var file = document.getElementById('f').files[0];
-  if (!file) { document.getElementById('r').textContent = 'Избери файл!'; return; }
-  var s = await sb.auth.getSession();
-  var token = s.data && s.data.session ? s.data.session.access_token : '';
-  document.getElementById('r').textContent = 'Токен: ' + (token ? 'ОК' : 'НЯМА');
-  if (!token) return;
-  var fd = new FormData();
-  fd.append('video', file, file.name);
-  fd.append('title', 'Тест XHR');
-  fd.append('token', token);
-  var xhr = new XMLHttpRequest();
-  xhr.open('POST', CONFIG.BACKEND + '/upload', true);
-  xhr.onload = function() { document.getElementById('r').textContent = 'Статус: ' + xhr.status + ' | ' + xhr.responseText.substring(0,100); };
-  xhr.onerror = function() { document.getElementById('r').textContent = 'XHR ГРЕШКА'; };
-  xhr.send(fd);
-  document.getElementById('r').textContent = 'Изпращане...';
-}
+STATE.sb = supabase.createClient(CONFIG.SB_URL, CONFIG.SB_ANON);
+STATE.uploadAccess = 'free';
+function openModal(){}
+function closeModal(){}
+function renderFeed(){}
+function resetFeed(){}
+</script>
+<script src="js/upload.js"></script>
+<script>
+bindUpload();
+STATE.sb.auth.getSession().then(function(s) {
+  if (s.data && s.data.session) {
+    STATE.user = { id: s.data.session.user.id };
+    STATE._token = s.data.session.access_token;
+    document.getElementById('upl-dz').textContent = 'Влязъл си! Натисни за файл.';
+  } else {
+    document.getElementById('upl-dz').textContent = 'НЕ СИ ВЛЯЗЪЛ!';
+  }
+});
 </script>
 </body>
 </html>
