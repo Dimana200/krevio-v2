@@ -37,11 +37,8 @@ STATE.sb.auth.getSession().then(function(s) {
   if (s.data && s.data.session) {
     STATE.user = { id: s.data.session.user.id };
     STATE._token = s.data.session.access_token;
-    document.getElementById('upl-dz').textContent = 'Влязъл си! Натисни за файл.';
+    alert('Влязъл си! Токен: ' + STATE._token.substring(0,30));
   } else {
-    document.getElementById('upl-dz').textContent = 'НЕ СИ ВЛЯЗЪЛ!';
+    alert('НЕ СИ ВЛЯЗЪЛ!');
   }
 });
-</script>
-</body>
-</html>
