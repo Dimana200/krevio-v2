@@ -189,5 +189,11 @@
 <script src="js/feed.js"></script>
 <script src="js/app.js"></script>
 
+<script>
+window.addEventListener('error', function(e) {
+  alert('JS ГРЕШКА: ' + e.message + ' | файл: ' + e.filename + ' | ред: ' + e.lineno);
+});
+</script>
+  
 </body>
 </html>
